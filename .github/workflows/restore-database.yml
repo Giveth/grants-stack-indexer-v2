@@ -54,7 +54,7 @@ jobs:
               working-directory: ./deployment/environments/${{ github.event.inputs.environment }}
               run: |
                   terraform init \
-                    -backend-config="bucket=${{ vars.TERRAFORM_STATE_BUCKET }}" \
+                    -backend-config="bucket=${{ vars.APP_NAME }}-terraform-state" \
                     -backend-config="key=${{ vars.APP_NAME }}/${{ github.event.inputs.environment }}/terraform.tfstate" \
                     -backend-config="region=${{ vars.AWS_REGION }}"
 
