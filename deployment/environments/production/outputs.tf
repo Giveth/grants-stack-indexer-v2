@@ -16,3 +16,8 @@ output "image_tag" {
 output "api_gateway_url" {
   value = module.api_gateway.api_gateway_url
 }
+
+output "rds_endpoint" {
+  description = "RDS database endpoint"
+  value       = module.storage.rds_endpoint
+}
