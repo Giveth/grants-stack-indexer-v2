@@ -77,7 +77,7 @@ module "simple_compute" {
   app_name                      = var.APP_NAME
   app_environment               = var.APP_ENVIRONMENT
   region                        = var.AWS_REGION
-  ecr_repository_url            = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.AWS_REGION}.amazonaws.com/${var.APP_NAME}"
+  ecr_repository_url            = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.AWS_REGION}.amazonaws.com/${var.APP_NAME}-processing"
   image_tag                     = var.BLUE_API_IMAGE_TAG
   database_url                  = "postgresql://${var.DATALAYER_PG_USER}:${var.DATALAYER_PG_PASSWORD}@${module.storage.rds_endpoint}/${var.BLUE_DATALAYER_PG_DB_NAME}"
   redis_url                     = ""  # Redis not used in simplified deployment

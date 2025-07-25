@@ -10,7 +10,7 @@ jobs:
     push-to-ecr:
         runs-on: ubuntu-latest
         env:
-            ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+            AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
 
         steps:
             - name: Checkout Repository
@@ -33,7 +33,7 @@ jobs:
               with:
                   context: .
                   target: processing
-                  tags: ${{ secrets.ECR_REGISTRY }}:${{ github.sha }}
+                  tags: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com/${{ vars.APP_NAME }}-processing:${{ github.sha }}
                   push: true
                   cache-from: type=gha
                   cache-to: type=gha,mode=max

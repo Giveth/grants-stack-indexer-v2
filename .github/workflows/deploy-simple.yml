@@ -25,7 +25,7 @@ jobs:
             TF_VAR_AWS_REGION: ${{ vars.AWS_REGION }}
             TF_VAR_APP_NAME: ${{ vars.APP_NAME }}
             TF_VAR_APP_ENVIRONMENT: ${{ github.event.inputs.environment }}
-            TF_VAR_BLUE_API_IMAGE_TAG: ${{ github.event.inputs.image_tag || 'latest' }}
+            TF_VAR_BLUE_API_IMAGE_TAG: ${{ github.event.inputs.image_tag || github.sha }}
             # Database
             TF_VAR_DATALAYER_PG_USER: ${{ secrets.DATALAYER_PG_USER }}
             TF_VAR_DATALAYER_PG_PASSWORD: ${{ secrets.DATALAYER_PG_PASSWORD }}
