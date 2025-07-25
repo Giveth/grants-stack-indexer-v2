@@ -85,8 +85,8 @@ module "simple_compute" {
   api_security_group_id         = module.networking.api_security_group_id
   processing_security_group_id  = module.networking.processing_security_group_id
   api_target_group_arn          = module.simple_load_balancer.api_target_group_arn
-  ecs_task_execution_role_arn   = module.iam.ecs_task_execution_role_arn
-  ecs_task_role_arn             = module.iam.ecs_task_role_arn
+  ecs_task_execution_role_arn   = module.iam.api_service_role_arn
+  ecs_task_role_arn             = module.iam.processing_service_role_arn
   CHAINS                        = var.BLUE_CHAINS
 }
 

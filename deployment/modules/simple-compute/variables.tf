@@ -68,12 +68,11 @@ variable "ecs_task_role_arn" {
 variable "CHAINS" {
   description = "List of blockchain chains to process"
   type = list(object({
-    id       = number
-    name     = string
-    env_vars = list(object({
-      name  = string
-      value = string
-    }))
+    id           = number
+    name         = string
+    rpcUrls      = list(string)
+    fetchLimit   = number
+    fetchDelayMs = number
   }))
   default = []
 }
