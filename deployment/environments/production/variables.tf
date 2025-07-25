@@ -2,43 +2,12 @@
 ####################### SIMPLIFIED DEPLOYMENT ##################
 ################################################################
 
-# Simplified variables replacing blue/green deployment
-variable "IMAGE_TAG" {
-  description = "Docker image tag to deploy"
-  type        = string
-  default     = "latest"
-}
-
-variable "SSL_CERTIFICATE_ARN" {
-  description = "ARN of SSL certificate for HTTPS (optional)"
-  type        = string
-  default     = ""
-}
-
-variable "REDIS_URL" {
-  description = "Redis connection URL (optional)"
-  type        = string
-  default     = ""
-}
-
-variable "DATALAYER_PG_DB_NAME" {
-  description = "Database name for the application"
-  type        = string
-  default     = "grants_stack_indexer"
-}
-
-variable "CHAINS" {
-  description = "List of blockchain chains to process"
-  type = list(object({
-    id       = number
-    name     = string
-    env_vars = list(object({
-      name  = string
-      value = string
-    }))
-  }))
-  default = []
-}
+# Reusing existing variable names for simplified deployment
+# IMAGE_TAG -> Use BLUE_API_IMAGE_TAG
+# SSL_CERTIFICATE_ARN -> Keep as is (if it exists)
+# REDIS_URL -> Keep as is (if it exists) 
+# DATALAYER_PG_DB_NAME -> Use BLUE_DATALAYER_PG_DB_NAME
+# CHAINS -> Use BLUE_CHAINS
 
 
 #########################################################

@@ -61,7 +61,7 @@ module "simple_load_balancer" {
   vpc_id                = module.networking.vpc_id
   public_subnets        = module.networking.public_subnets
   alb_security_group_id = module.networking.alb_security_group_id
-  ssl_certificate_arn   = var.SSL_CERTIFICATE_ARN
+  ssl_certificate_arn   = ""  # SSL certificate not used in simplified deployment
 }
 
 module "simple_compute" {
@@ -70,16 +70,16 @@ module "simple_compute" {
   app_environment               = var.APP_ENVIRONMENT
   region                        = var.AWS_REGION
   ecr_repository_url            = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.AWS_REGION}.amazonaws.com/${var.APP_NAME}"
-  image_tag                     = var.IMAGE_TAG
-  database_url                  = "postgresql://${var.DATALAYER_PG_USER}:${var.DATALAYER_PG_PASSWORD}@${module.storage.rds_endpoint}/${var.DATALAYER_PG_DB_NAME}"
-  redis_url                     = var.REDIS_URL
+  image_tag                     = var.BLUE_API_IMAGE_TAG
+  database_url                  = "postgresql://${var.DATALAYER_PG_USER}:${var.DATALAYER_PG_PASSWORD}@${module.storage.rds_endpoint}/${var.BLUE_DATALAYER_PG_DB_NAME}"
+  redis_url                     = ""  # Redis not used in simplified deployment
   public_subnets                = module.networking.public_subnets
   api_security_group_id         = module.networking.api_security_group_id
   processing_security_group_id  = module.networking.processing_security_group_id
   api_target_group_arn          = module.simple_load_balancer.api_target_group_arn
   ecs_task_execution_role_arn   = module.iam.ecs_task_execution_role_arn
   ecs_task_role_arn             = module.iam.ecs_task_role_arn
-  CHAINS                        = var.CHAINS
+  CHAINS                        = var.BLUE_CHAINS
 }
 
 module "api_gateway" {

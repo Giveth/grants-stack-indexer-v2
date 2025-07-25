@@ -10,7 +10,7 @@ output "cluster_name" {
 
 output "image_tag" {
   description = "Currently deployed image tag"
-  value       = var.IMAGE_TAG
+  value       = var.BLUE_API_IMAGE_TAG
 }
 
 output "api_gateway_url" {
