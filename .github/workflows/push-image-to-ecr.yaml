@@ -37,7 +37,9 @@ jobs:
               with:
                   context: .
                   target: processing
-                  tags: ${{ steps.aws-account.outputs.account-id }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com/${{ vars.APP_NAME }}-processing:${{ github.sha }}
+                  tags: |
+                      ${{ steps.aws-account.outputs.account-id }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com/${{ vars.APP_NAME }}-processing:${{ github.sha }}
+                      ${{ steps.aws-account.outputs.account-id }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com/${{ vars.APP_NAME }}-processing:latest
                   push: true
                   cache-from: type=gha
                   cache-to: type=gha,mode=max
