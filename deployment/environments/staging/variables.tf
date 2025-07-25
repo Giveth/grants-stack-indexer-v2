@@ -1,24 +1,13 @@
 ################################################################
-####################### DEPLOYMENT STATE #######################
+####################### SIMPLIFIED DEPLOYMENT ##################
 ################################################################
 
-variable "DEPLOYMENT_STATE" {
-  description = "Current deployment state (single, deploying)"
-  type        = string
-  validation {
-    condition     = contains(["single", "deploying"], var.DEPLOYMENT_STATE)
-    error_message = "DEPLOYMENT_STATE must be either 'single' or 'deploying'"
-  }
-}
-
-variable "ACTIVE_DEPLOYMENT" {
-  description = "Which environment is currently active (blue or green)"
-  type        = string
-  validation {
-    condition     = contains(["blue", "green"], var.ACTIVE_DEPLOYMENT)
-    error_message = "ACTIVE_DEPLOYMENT must be either 'blue' or 'green'"
-  }
-}
+# Reusing existing variable names for simplified deployment
+# IMAGE_TAG -> Use BLUE_API_IMAGE_TAG
+# SSL_CERTIFICATE_ARN -> Keep as is (if it exists)
+# REDIS_URL -> Keep as is (if it exists) 
+# DATALAYER_PG_DB_NAME -> Use BLUE_DATALAYER_PG_DB_NAME
+# CHAINS -> Use BLUE_CHAINS
 
 
 #########################################################
