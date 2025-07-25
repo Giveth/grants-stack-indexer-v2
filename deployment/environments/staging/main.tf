@@ -54,14 +54,14 @@ module "bastion" {
   instance_type                 = "t3.large"
 }
 
-module "load_balancer" {
-  source                          = "../../modules/load_balancer"
-  app_name                        = var.APP_NAME
-  app_environment                 = var.APP_ENVIRONMENT
-  vpc_id                          = module.networking.vpc_id
-  public_subnets                  = module.networking.public_subnets
-  load_balancer_security_group_id = module.networking.load_balancer_security_group_id
-  active_deployment               = var.ACTIVE_DEPLOYMENT
+module "simple_load_balancer" {
+  source                = "../../modules/simple-load-balancer"
+  app_name              = var.APP_NAME
+  app_environment       = var.APP_ENVIRONMENT
+  vpc_id                = module.networking.vpc_id
+  public_subnets        = module.networking.public_subnets
+  alb_security_group_id = module.networking.alb_security_group_id
+  ssl_certificate_arn   = ""  # SSL certificate not used in simplified deployment
 }
 
 module "api_gateway" {
