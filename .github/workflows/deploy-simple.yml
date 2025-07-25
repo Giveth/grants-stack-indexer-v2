@@ -64,7 +64,6 @@ jobs:
                     -backend-config="bucket=${{ vars.APP_NAME }}-terraform-state" \
                     -backend-config="key=${{ vars.APP_NAME }}/${{ github.event.inputs.environment }}/terraform.tfstate" \
                     -backend-config="region=${{ vars.AWS_REGION }}"
-                    -backend-config="encrypt=true"
 
             - name: Validate Terraform
               working-directory: ./deployment/environments/${{ github.event.inputs.environment }}
