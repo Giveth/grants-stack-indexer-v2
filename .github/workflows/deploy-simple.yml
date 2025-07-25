@@ -25,16 +25,18 @@ jobs:
             TF_VAR_AWS_REGION: ${{ vars.AWS_REGION }}
             TF_VAR_APP_NAME: ${{ vars.APP_NAME }}
             TF_VAR_APP_ENVIRONMENT: ${{ github.event.inputs.environment }}
-            TF_VAR_IMAGE_TAG: ${{ github.event.inputs.image_tag || 'latest' }}
+            TF_VAR_BLUE_API_IMAGE_TAG: ${{ github.event.inputs.image_tag || 'latest' }}
             # Database
             TF_VAR_DATALAYER_PG_USER: ${{ secrets.DATALAYER_PG_USER }}
             TF_VAR_DATALAYER_PG_PASSWORD: ${{ secrets.DATALAYER_PG_PASSWORD }}
-            TF_VAR_DATALAYER_PG_DB_NAME: ${{ vars.DATALAYER_PG_DB_NAME || 'grants_stack_indexer' }}
+            TF_VAR_BLUE_DATALAYER_PG_DB_NAME: ${{ vars.DATALAYER_PG_DB_NAME || 'grants_stack_indexer' }}
             # Optional configurations
-            TF_VAR_SSL_CERTIFICATE_ARN: ${{ vars.SSL_CERTIFICATE_ARN || '' }}
-            TF_VAR_REDIS_URL: ${{ vars.REDIS_URL || '' }}
+            # TF_VAR_SSL_CERTIFICATE_ARN: Not used in simplified deployment
+            # TF_VAR_REDIS_URL: Not used in simplified deployment
             # Chains configuration
-            TF_VAR_CHAINS: ${{ vars.CHAINS || '[]' }}
+            TF_VAR_BLUE_CHAINS: ${{ vars.CHAINS || '[]' }}
+            # API Keys
+            TF_VAR_BLUE_COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
 
         steps:
             - name: Check out repository
@@ -59,9 +61,10 @@ jobs:
               working-directory: ./deployment/environments/${{ github.event.inputs.environment }}
               run: |
                   terraform init \
-                    -backend-config="bucket=${{ vars.TERRAFORM_STATE_BUCKET }}" \
+                    -backend-config="bucket=${{ vars.APP_NAME }}-terraform-state" \
                     -backend-config="key=${{ vars.APP_NAME }}/${{ github.event.inputs.environment }}/terraform.tfstate" \
                     -backend-config="region=${{ vars.AWS_REGION }}"
+                    -backend-config="encrypt=true"
 
             - name: Validate Terraform
               working-directory: ./deployment/environments/${{ github.event.inputs.environment }}
