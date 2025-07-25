@@ -129,6 +129,34 @@ resource "aws_ecs_task_definition" "api_task" {
         {
           name  = "REDIS_URL"
           value = var.redis_url
+        },
+        {
+          name  = "PRICING_SOURCE"
+          value = var.pricing_source
+        },
+        {
+          name  = "COINGECKO_API_KEY"
+          value = var.coingecko_api_key
+        },
+        {
+          name  = "COINGECKO_API_TYPE"
+          value = var.coingecko_api_type
+        },
+        {
+          name  = "METADATA_SOURCE"
+          value = var.metadata_source
+        },
+        {
+          name  = "PUBLIC_GATEWAY_URLS"
+          value = jsonencode(var.public_gateway_urls)
+        },
+        {
+          name  = "LOG_LEVEL"
+          value = var.log_level
+        },
+        {
+          name  = "CHAINS"
+          value = jsonencode(var.CHAINS)
         }
       ]
 

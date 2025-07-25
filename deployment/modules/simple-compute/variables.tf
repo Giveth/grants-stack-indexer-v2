@@ -76,3 +76,43 @@ variable "CHAINS" {
   }))
   default = []
 }
+
+variable "coingecko_api_key" {
+  description = "CoinGecko API key for pricing data"
+  type        = string
+  sensitive   = true
+}
+
+variable "pricing_source" {
+  description = "Pricing source: 'dummy' or 'coingecko'"
+  type        = string
+  default     = "coingecko"
+  validation {
+    condition     = contains(["dummy", "coingecko"], var.pricing_source)
+    error_message = "PRICING_SOURCE must be either 'dummy' or 'coingecko'."
+  }
+}
+
+variable "metadata_source" {
+  description = "Metadata source configuration"
+  type        = string
+  default     = "ipfs"
+}
+
+variable "public_gateway_urls" {
+  description = "List of public IPFS gateway URLs"
+  type        = list(string)
+  default     = ["https://ipfs.io/ipfs/", "https://gateway.pinata.cloud/ipfs/"]
+}
+
+variable "coingecko_api_type" {
+  description = "CoinGecko API type"
+  type        = string
+  default     = "demo"
+}
+
+variable "log_level" {
+  description = "Application log level"
+  type        = string
+  default     = "info"
+}

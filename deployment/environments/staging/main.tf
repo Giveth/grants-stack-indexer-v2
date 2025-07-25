@@ -88,5 +88,11 @@ module "simple_compute" {
   ecs_task_execution_role_arn   = module.iam.api_service_role_arn
   ecs_task_role_arn             = module.iam.processing_service_role_arn
   CHAINS                        = var.BLUE_CHAINS
+  coingecko_api_key             = var.BLUE_COINGECKO_API_KEY
+  pricing_source                = "coingecko"
+  metadata_source               = "ipfs"
+  public_gateway_urls           = ["https://ipfs.io/ipfs/", "https://gateway.pinata.cloud/ipfs/"]
+  coingecko_api_type            = "demo"
+  log_level                     = "info"
 }
 
