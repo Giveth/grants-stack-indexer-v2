@@ -82,7 +82,7 @@ module "simple_compute" {
   CHAINS                        = var.BLUE_CHAINS
   coingecko_api_key             = var.BLUE_COINGECKO_API_KEY
   pricing_source                = "coingecko"
-  metadata_source               = "ipfs"
+  metadata_source               = "public-gateway"
   public_gateway_urls           = ["https://ipfs.io/ipfs/", "https://gateway.pinata.cloud/ipfs/"]
   coingecko_api_type            = "demo"
   log_level                     = "info"

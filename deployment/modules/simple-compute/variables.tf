@@ -96,7 +96,11 @@ variable "pricing_source" {
 variable "metadata_source" {
   description = "Metadata source configuration"
   type        = string
-  default     = "ipfs"
+  default     = "public-gateway"
+  validation {
+    condition     = contains(["dummy", "public-gateway"], var.metadata_source)
+    error_message = "METADATA_SOURCE must be either 'dummy' or 'public-gateway'."
+  }
 }
 
 variable "public_gateway_urls" {
