@@ -9,9 +9,7 @@ on:
 jobs:
     push-to-ecr:
         runs-on: ubuntu-latest
-        env:
-            AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-
+        
         steps:
             - name: Checkout Repository
               uses: actions/checkout@v3
@@ -27,13 +25,19 @@ jobs:
               uses: docker/setup-buildx-action@v2
 
             - name: Log in to Amazon ECR
+              id: login-ecr
               uses: aws-actions/amazon-ecr-login@v2
+              
+            - name: Get AWS Account ID
+              id: aws-account
+              run: echo "account-id=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_OUTPUT
+              
             - name: Build Docker Image
               uses: docker/build-push-action@v3
               with:
                   context: .
                   target: processing
-                  tags: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com/${{ vars.APP_NAME }}-processing:${{ github.sha }}
+                  tags: ${{ steps.aws-account.outputs.account-id }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com/${{ vars.APP_NAME }}-processing:${{ github.sha }}
                   push: true
                   cache-from: type=gha
                   cache-to: type=gha,mode=max
