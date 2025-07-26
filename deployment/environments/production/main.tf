@@ -73,12 +73,12 @@ module "simple_compute" {
   ecs_task_role_arn             = module.iam.processing_service_role_arn
   CHAINS                        = var.BLUE_CHAINS
   coingecko_api_key             = var.BLUE_COINGECKO_API_KEY
-  pricing_source                = "coingecko"
-  metadata_source               = "public-gateway"
-  public_gateway_urls           = ["https://ipfs.io", "https://dweb.link", "https://cloudflare-ipfs.com", "https://gateway.pinata.cloud", "https://ipfs.infura.io", "https://ipfs.fleek.co", "https://ipfs.eth.aragon.network", "https://ipfs.jes.xxx", "https://ipfs.lol", "https://ipfs.mle.party"]
-  coingecko_api_type            = "pro"
-  log_level                     = "info"
-  indexer_graphql_url           = "http://localhost:8080/v1/graphql"
+  pricing_source                = var.BLUE_PRICING_SOURCE
+  metadata_source               = var.BLUE_METADATA_SOURCE
+  public_gateway_urls           = var.BLUE_PUBLIC_GATEWAY_URLS
+  coingecko_api_type            = var.BLUE_COINGECKO_API_TYPE
+  log_level                     = var.BLUE_LOG_LEVEL
+  indexer_graphql_url           = var.BLUE_INDEXER_GRAPHQL_URL
 }
 
 module "api_gateway" {

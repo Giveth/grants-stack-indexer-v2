@@ -61,8 +61,50 @@ variable "BLUE_DATALAYER_PG_DB_NAME" {
   type        = string
 }
 
+variable "BLUE_API_IMAGE_TAG" {
+  description = "API image tag (BLUE)"
+  type        = string
+  default     = "latest"
+}
+
 variable "BLUE_COINGECKO_API_KEY" {
   description = "Coingecko API key (BLUE)"
   type        = string
   sensitive   = true
+}
+
+variable "BLUE_PRICING_SOURCE" {
+  description = "Pricing source (BLUE)"
+  type        = string
+  default     = "coingecko"
+}
+
+variable "BLUE_METADATA_SOURCE" {
+  description = "Metadata source (BLUE)"
+  type        = string
+  default     = "public-gateway"
+}
+
+variable "BLUE_PUBLIC_GATEWAY_URLS" {
+  description = "Public gateway URLs (BLUE)"
+  type        = list(string)
+  default     = ["https://ipfs.io", "https://dweb.link"]
+}
+
+variable "BLUE_COINGECKO_API_TYPE" {
+  description = "CoinGecko API type (BLUE)"
+  type        = string
+  default     = "demo"
+}
+
+variable "BLUE_LOG_LEVEL" {
+  description = "Log level (BLUE)"
+  type        = string
+  default     = "info"
+}
+
+variable "BLUE_INDEXER_GRAPHQL_URL" {
+  description = "Indexer GraphQL URL (BLUE)"
+  type        = string
+  default     = "http://localhost:8080/v1/graphql"
 }
