@@ -68,8 +68,21 @@ jobs:
                     echo "Error: TERRAFORM_VARS is not valid JSON."
                     exit 1
                   fi
-                  # Write the contents of TERRAFORM_VARS to tfvars.json
-                  cat <<< "$TERRAFORM_VARS" > tfvars.json
+                  # Extract only BLUE variables for simplified deployment
+                  echo "$TERRAFORM_VARS" | jq '{
+                    BLUE_CHAINS: .BLUE_CHAINS,
+                    BLUE_COINGECKO_API_KEY: .BLUE_COINGECKO_API_KEY,
+                    BLUE_COINGECKO_API_TYPE: .BLUE_COINGECKO_API_TYPE,
+                    BLUE_PRICING_SOURCE: .BLUE_PRICING_SOURCE,
+                    BLUE_METADATA_SOURCE: .BLUE_METADATA_SOURCE,
+                    BLUE_PUBLIC_GATEWAY_URLS: .BLUE_PUBLIC_GATEWAY_URLS,
+                    BLUE_LOG_LEVEL: .BLUE_LOG_LEVEL,
+                    BLUE_INDEXER_GRAPHQL_URL: .BLUE_INDEXER_GRAPHQL_URL,
+                    BLUE_DATALAYER_PG_DB_NAME: .BLUE_DATALAYER_PG_DB_NAME
+                  }' > tfvars.json
+                  # Show what variables we extracted
+                  echo "Extracted variables for simplified deployment:"
+                  cat tfvars.json
                   # Plan and apply with the variables
                   terraform plan -var-file=tfvars.json -out=tfplan
                   terraform apply -auto-approve tfplan
