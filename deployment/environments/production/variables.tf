@@ -34,11 +34,6 @@ variable "DATALAYER_PG_USER" {
   type        = string
 }
 
-variable "BASTION_SSH_PUBLIC_KEY" {
-  description = "SSH public key for bastion host access"
-  type        = string
-}
-
 #########################################################
 ####################### BLUE VARIABLES ##################
 #########################################################
