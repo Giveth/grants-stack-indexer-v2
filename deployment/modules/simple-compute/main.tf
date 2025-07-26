@@ -88,7 +88,109 @@ module "ecs" {
 }
 
 ####################################
-# API Task Definition
+# Indexer GraphQL API Task Definition (Hasura)
+####################################
+resource "aws_ecs_task_definition" "indexer_graphql_api_task" {
+  family                   = "${var.app_name}-${var.app_environment}-indexer-graphql-api"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = 512
+  memory                   = 1024
+  execution_role_arn       = var.ecs_task_execution_role_arn
+  task_role_arn            = var.ecs_task_role_arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "indexer-graphql-api"
+      image     = "hasura/graphql-engine:v2.43.0"
+      essential = true
+      
+      portMappings = [
+        {
+          containerPort = 8080
+          hostPort      = 8080
+          protocol      = "tcp"
+        }
+      ]
+
+      environment = [
+        {
+          name  = "HASURA_GRAPHQL_DATABASE_URL"
+          value = var.database_url
+        },
+        {
+          name  = "HASURA_GRAPHQL_ENABLE_CONSOLE"
+          value = "true"
+        },
+        {
+          name  = "HASURA_GRAPHQL_ADMIN_SECRET"
+          value = "secret"
+        },
+        {
+          name  = "HASURA_GRAPHQL_UNAUTHORIZED_ROLE"
+          value = "public"
+        },
+        {
+          name  = "HASURA_GRAPHQL_CORS_DOMAIN"
+          value = "*"
+        },
+        {
+          name  = "HASURA_GRAPHQL_ENABLE_TELEMETRY"
+          value = "false"
+        },
+        {
+          name  = "HASURA_GRAPHQL_EXPERIMENTAL_FEATURES"
+          value = "bigquery_string_numeric_input,naming_convention"
+        },
+        {
+          name  = "HASURA_GRAPHQL_DEFAULT_NAMING_CONVENTION"
+          value = "graphql-default"
+        },
+        {
+          name  = "HASURA_GRAPHQL_BIGQUERY_STRING_NUMERIC_INPUT"
+          value = "true"
+        },
+        {
+          name  = "HASURA_GRAPHQL_DEV_MODE"
+          value = "true"
+        },
+        {
+          name  = "HASURA_GRAPHQL_ENABLED_LOG_TYPES"
+          value = "startup, http-log, webhook-log, websocket-log, query-log"
+        },
+        {
+          name  = "HASURA_GRAPHQL_ADMIN_INTERNAL_ERRORS"
+          value = "true"
+        }
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = local.log_group_name
+          "awslogs-region"        = var.region
+          "awslogs-stream-prefix" = "indexer-graphql-api"
+        }
+      }
+
+      healthCheck = {
+        command     = ["CMD-SHELL", "timeout 1s bash -c ':> /dev/tcp/127.0.0.1/8080' || exit 1"]
+        interval    = 30
+        timeout     = 5
+        retries     = 3
+        startPeriod = 60
+      }
+    }
+  ])
+
+  tags = {
+    Environment = var.app_environment
+    Project     = var.app_name
+  }
+}
+
+####################################
+# API Task Definition (Processing Service)
 ####################################
 resource "aws_ecs_task_definition" "api_task" {
   family                   = "${var.app_name}-${var.app_environment}-api"
@@ -104,6 +206,8 @@ resource "aws_ecs_task_definition" "api_task" {
       name      = local.api_container_name
       image     = "${var.ecr_repository_url}:${var.image_tag}"
       essential = true
+      
+      command = ["npm", "run", "start"]
       
       portMappings = [
         {
@@ -208,7 +312,7 @@ resource "aws_ecs_task_definition" "processing_tasks" {
       image     = "${var.ecr_repository_url}:${var.image_tag}"
       essential = true
       
-      command = ["npm", "run", "process", "--", "--chain", tostring(each.value.id)]
+      command = ["npm", "run", "start", "--", "--chain", tostring(each.value.id)]
 
       environment = [
         {
@@ -267,6 +371,84 @@ resource "aws_ecs_task_definition" "processing_tasks" {
       }
     }
   ])
+
+  tags = {
+    Environment = var.app_environment
+    Project     = var.app_name
+    Chain       = each.value.id
+  }
+}
+
+####################################
+# ECS Services
+####################################
+
+# Indexer GraphQL API Service
+resource "aws_ecs_service" "indexer_graphql_api_service" {
+  name            = "${var.app_name}-${var.app_environment}-indexer-graphql-api"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.indexer_graphql_api_task.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets          = var.private_subnets
+    security_groups  = [var.processing_security_group_id]
+    assign_public_ip = false
+  }
+
+  load_balancer {
+    target_group_arn = var.target_group_arn
+    container_name   = "indexer-graphql-api"
+    container_port   = 8080
+  }
+
+  depends_on = [var.alb_listener_arn]
+
+  tags = {
+    Environment = var.app_environment
+    Project     = var.app_name
+  }
+}
+
+# API Service (Processing)
+resource "aws_ecs_service" "api_service" {
+  name            = "${var.app_name}-${var.app_environment}-api"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.api_task.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets          = var.private_subnets
+    security_groups  = [var.processing_security_group_id]
+    assign_public_ip = false
+  }
+
+  depends_on = [aws_ecs_service.indexer_graphql_api_service]
+
+  tags = {
+    Environment = var.app_environment
+    Project     = var.app_name
+  }
+}
+
+# Processing Services (per chain)
+resource "aws_ecs_service" "processing_services" {
+  for_each        = { for chain in var.CHAINS : chain.id => chain }
+  name            = "${var.app_name}-${var.app_environment}-processing-${each.value.id}"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.processing_tasks[each.key].arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets          = var.private_subnets
+    security_groups  = [var.processing_security_group_id]
+    assign_public_ip = false
+  }
+
+  depends_on = [aws_ecs_service.indexer_graphql_api_service]
 
   tags = {
     Environment = var.app_environment

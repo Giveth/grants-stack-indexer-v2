@@ -78,7 +78,10 @@ module "simple_compute" {
   public_gateway_urls           = ["https://ipfs.io", "https://dweb.link", "https://cloudflare-ipfs.com", "https://gateway.pinata.cloud", "https://ipfs.infura.io", "https://ipfs.fleek.co", "https://ipfs.eth.aragon.network", "https://ipfs.jes.xxx", "https://ipfs.lol", "https://ipfs.mle.party"]
   coingecko_api_type            = "pro"
   log_level                     = "info"
-  indexer_graphql_url           = "https://indexer.dev.hyperindex.xyz/e6a0458/v1/graphql"
+  indexer_graphql_url           = "http://localhost:8080/v1/graphql"
+  private_subnets               = module.vpc.private_subnets
+  target_group_arn              = module.simple_load_balancer.api_target_group_arn
+  alb_listener_arn              = module.simple_load_balancer.listener_arn
 }
 
 module "api_gateway" {
