@@ -42,6 +42,7 @@ variable "DATALAYER_PG_USER" {
 variable "BLUE_API_IMAGE_TAG" {
   description = "API image tag (BLUE)"
   type        = string
+  default     = "latest"
 }
 
 variable "BLUE_CHAINS" {
@@ -59,12 +60,6 @@ variable "BLUE_CHAINS" {
 variable "BLUE_DATALAYER_PG_DB_NAME" {
   description = "Database name (BLUE)"
   type        = string
-}
-
-variable "BLUE_API_IMAGE_TAG" {
-  description = "API image tag (BLUE)"
-  type        = string
-  default     = "latest"
 }
 
 variable "BLUE_COINGECKO_API_KEY" {
