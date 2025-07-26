@@ -32,6 +32,7 @@ jobs:
             APP_NAME: ${{ vars.APP_NAME }}
             APP_ENVIRONMENT: ${{ github.event.inputs.environment }}
             BACKUP_BUCKET: ${{ vars.BACKUP_BUCKET || format('{0}-terraform-state', vars.APP_NAME) }}
+            TERRAFORM_VARS: ${{ secrets.TERRAFORM_VARS }}
 
         steps:
             - name: Check out repository
