@@ -23,36 +23,6 @@ module "ecs" {
   ####################################
   services = merge(
     {
-      indexer_graphql_api_service = {
-        name                   = "${var.app_name}-indexer-graphql-api-service"
-        create_security_group  = false
-        create_task_definition = false
-        task_definition_arn    = aws_ecs_task_definition.indexer_graphql_api_task.arn
-        desired_count          = 1
-        platform_version       = "LATEST"
-        force_new_deployment   = true
-        assign_public_ip       = true
-        subnet_ids             = var.public_subnets
-        security_group_ids     = [var.api_security_group_id]
-
-        autoscaling = {
-          min_capacity = 1
-          max_capacity = 2
-          cpu = {
-            target_value       = 75
-            scale_in_cooldown  = 300
-            scale_out_cooldown = 300
-          }
-        }
-
-        load_balancer = {
-          service = {
-            target_group_arn = var.api_target_group_arn
-            container_name   = "indexer-graphql-api"
-            container_port   = 8080
-          }
-        }
-      },
       api_service = {
         name                   = "${var.app_name}-api-service"
         create_security_group  = false
@@ -118,14 +88,14 @@ module "ecs" {
 }
 
 ####################################
-# Indexer GraphQL API Task Definition (Hasura)
+# Combined API + Hasura Task Definition
 ####################################
-resource "aws_ecs_task_definition" "indexer_graphql_api_task" {
-  family                   = "${var.app_name}-${var.app_environment}-indexer-graphql-api"
+resource "aws_ecs_task_definition" "api_task" {
+  family                   = "${var.app_name}-${var.app_environment}-api"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = 512
-  memory                   = 1024
+  cpu                      = 1536
+  memory                   = 3072
   execution_role_arn       = var.ecs_task_execution_role_arn
   task_role_arn            = var.ecs_task_role_arn
 
@@ -133,7 +103,7 @@ resource "aws_ecs_task_definition" "indexer_graphql_api_task" {
     {
       name      = "indexer-graphql-api"
       image     = "hasura/graphql-engine:v2.43.0"
-      essential = true
+      essential = false
       
       portMappings = [
         {
@@ -210,32 +180,17 @@ resource "aws_ecs_task_definition" "indexer_graphql_api_task" {
         retries     = 3
         startPeriod = 60
       }
-    }
-  ])
-
-  tags = {
-    Environment = var.app_environment
-    Project     = var.app_name
-  }
-}
-
-####################################
-# API Task Definition (Processing Service)
-####################################
-resource "aws_ecs_task_definition" "api_task" {
-  family                   = "${var.app_name}-${var.app_environment}-api"
-  requires_compatibilities = ["FARGATE"]
-  network_mode             = "awsvpc"
-  cpu                      = 512
-  memory                   = 1024
-  execution_role_arn       = var.ecs_task_execution_role_arn
-  task_role_arn            = var.ecs_task_role_arn
-
-  container_definitions = jsonencode([
+    },
     {
       name      = local.api_container_name
       image     = "${var.ecr_repository_url}:${var.image_tag}"
       essential = true
+      dependsOn = [
+        {
+          containerName = "indexer-graphql-api"
+          condition     = "HEALTHY"
+        }
+      ]
       
       command = ["npm", "run", "start"]
       
