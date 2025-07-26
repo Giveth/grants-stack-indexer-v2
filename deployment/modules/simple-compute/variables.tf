@@ -126,18 +126,3 @@ variable "indexer_graphql_url" {
   type        = string
   default     = "http://localhost:3000/graphql"
 }
-
-variable "private_subnets" {
-  description = "List of private subnet IDs for ECS services"
-  type        = list(string)
-}
-
-variable "target_group_arn" {
-  description = "ARN of the target group for load balancer"
-  type        = string
-}
-
-variable "alb_listener_arn" {
-  description = "ARN of the ALB listener"
-  type        = string
-}

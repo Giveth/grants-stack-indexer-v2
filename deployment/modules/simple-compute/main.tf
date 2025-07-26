@@ -23,6 +23,36 @@ module "ecs" {
   ####################################
   services = merge(
     {
+      indexer_graphql_api_service = {
+        name                   = "${var.app_name}-indexer-graphql-api-service"
+        create_security_group  = false
+        create_task_definition = false
+        task_definition_arn    = aws_ecs_task_definition.indexer_graphql_api_task.arn
+        desired_count          = 1
+        platform_version       = "LATEST"
+        force_new_deployment   = true
+        assign_public_ip       = true
+        subnet_ids             = var.public_subnets
+        security_group_ids     = [var.api_security_group_id]
+
+        autoscaling = {
+          min_capacity = 1
+          max_capacity = 2
+          cpu = {
+            target_value       = 75
+            scale_in_cooldown  = 300
+            scale_out_cooldown = 300
+          }
+        }
+
+        load_balancer = {
+          service = {
+            target_group_arn = var.api_target_group_arn
+            container_name   = "indexer-graphql-api"
+            container_port   = 8080
+          }
+        }
+      },
       api_service = {
         name                   = "${var.app_name}-api-service"
         create_security_group  = false
@@ -371,84 +401,6 @@ resource "aws_ecs_task_definition" "processing_tasks" {
       }
     }
   ])
-
-  tags = {
-    Environment = var.app_environment
-    Project     = var.app_name
-    Chain       = each.value.id
-  }
-}
-
-####################################
-# ECS Services
-####################################
-
-# Indexer GraphQL API Service
-resource "aws_ecs_service" "indexer_graphql_api_service" {
-  name            = "${var.app_name}-${var.app_environment}-indexer-graphql-api"
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.indexer_graphql_api_task.arn
-  desired_count   = 1
-  launch_type     = "FARGATE"
-
-  network_configuration {
-    subnets          = var.private_subnets
-    security_groups  = [var.processing_security_group_id]
-    assign_public_ip = false
-  }
-
-  load_balancer {
-    target_group_arn = var.target_group_arn
-    container_name   = "indexer-graphql-api"
-    container_port   = 8080
-  }
-
-  depends_on = [var.alb_listener_arn]
-
-  tags = {
-    Environment = var.app_environment
-    Project     = var.app_name
-  }
-}
-
-# API Service (Processing)
-resource "aws_ecs_service" "api_service" {
-  name            = "${var.app_name}-${var.app_environment}-api"
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.api_task.arn
-  desired_count   = 1
-  launch_type     = "FARGATE"
-
-  network_configuration {
-    subnets          = var.private_subnets
-    security_groups  = [var.processing_security_group_id]
-    assign_public_ip = false
-  }
-
-  depends_on = [aws_ecs_service.indexer_graphql_api_service]
-
-  tags = {
-    Environment = var.app_environment
-    Project     = var.app_name
-  }
-}
-
-# Processing Services (per chain)
-resource "aws_ecs_service" "processing_services" {
-  for_each        = { for chain in var.CHAINS : chain.id => chain }
-  name            = "${var.app_name}-${var.app_environment}-processing-${each.value.id}"
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.processing_tasks[each.key].arn
-  desired_count   = 1
-  launch_type     = "FARGATE"
-
-  network_configuration {
-    subnets          = var.private_subnets
-    security_groups  = [var.processing_security_group_id]
-    assign_public_ip = false
-  }
-
-  depends_on = [aws_ecs_service.indexer_graphql_api_service]
 
   tags = {
     Environment = var.app_environment
