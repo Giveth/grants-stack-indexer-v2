@@ -208,7 +208,7 @@ resource "aws_ecs_task_definition" "processing_tasks" {
       image     = "${var.ecr_repository_url}:${var.image_tag}"
       essential = true
       
-      command = ["npm", "run", "process", "--", "--chain", each.value.id]
+      command = ["npm", "run", "process", "--", "--chain", tostring(each.value.id)]
 
       environment = [
         {
