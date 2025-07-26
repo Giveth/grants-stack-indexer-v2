@@ -332,7 +332,9 @@ jobs:
                         echo "Checking if database restore was successful by verifying data exists..."
                         
                         # Check if any tables were created (basic success indicator)
-                        TABLE_COUNT=$(psql "$POSTGRES_URL" -d "${DB_NAME}" -tAc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';")
+                        # Use the SSH tunnel connection for verification
+                        VERIFY_URL="postgresql://${{ secrets.DATALAYER_PG_USER }}:${{ secrets.DATALAYER_PG_PASSWORD }}@localhost:5433/${DB_NAME}"
+                        TABLE_COUNT=$(psql "$VERIFY_URL" -tAc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';")
                         echo "Found ${TABLE_COUNT} tables in the restored database"
                         
                         if [ "${TABLE_COUNT}" -gt 0 ]; then
