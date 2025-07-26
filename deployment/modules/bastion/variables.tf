@@ -27,3 +27,8 @@ variable "bastion_security_group_id" {
   description = "The ID of the bastion security group"
   type        = string
 }
+
+variable "key_name" {
+  description = "The name of the AWS key pair for SSH access to the bastion host"
+  type        = string
+}

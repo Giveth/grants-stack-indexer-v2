@@ -44,15 +44,7 @@ module "storage" {
   rds_instance_class    = "db.t4g.micro"
 }
 
-module "bastion" {
-  source                        = "../../modules/bastion"
-  app_environment               = var.APP_ENVIRONMENT
-  app_name                      = var.APP_NAME
-  instance_type                 = "t3.large"
-  subnet_id                     = module.networking.private_subnets[0]
-  bastion_instance_profile_name = module.iam.bastion_instance_profile_name
-  bastion_security_group_id     = module.networking.processing_security_group_id
-}
+# Bastion host removed - will be created dynamically for restore operations
 
 module "simple_load_balancer" {
   source                = "../../modules/simple-load-balancer"

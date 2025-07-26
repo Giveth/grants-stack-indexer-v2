@@ -44,15 +44,7 @@ module "storage" {
   rds_subnet_group_name = module.networking.rds_subnet_group_name
 }
 
-module "bastion" {
-  source                        = "../../modules/bastion"
-  app_environment               = var.APP_ENVIRONMENT
-  app_name                      = var.APP_NAME
-  subnet_id                     = module.networking.private_subnets[0]
-  bastion_instance_profile_name = module.iam.bastion_instance_profile_name
-  bastion_security_group_id     = module.networking.processing_security_group_id
-  instance_type                 = "t3.large"
-}
+# Bastion host removed - will be created dynamically for restore operations
 
 module "simple_load_balancer" {
   source                = "../../modules/simple-load-balancer"

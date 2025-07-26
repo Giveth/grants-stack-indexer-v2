@@ -21,3 +21,18 @@ output "rds_endpoint" {
   description = "RDS database endpoint"
   value       = module.storage.rds_endpoint
 }
+
+output "vpc_id" {
+  description = "VPC ID"
+  value       = module.networking.vpc_id
+}
+
+output "public_subnets" {
+  description = "Public subnet IDs"
+  value       = module.networking.public_subnets
+}
+
+output "processing_security_group_id" {
+  description = "Processing security group ID"
+  value       = module.networking.processing_security_group_id
+}

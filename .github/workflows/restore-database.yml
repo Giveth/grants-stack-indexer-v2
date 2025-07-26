@@ -58,7 +58,7 @@ jobs:
                     -backend-config="key=${{ vars.APP_NAME }}/${{ github.event.inputs.environment }}/terraform.tfstate" \
                     -backend-config="region=${{ vars.AWS_REGION }}"
 
-            - name: Get database connection details
+            - name: Get infrastructure details
               working-directory: ./deployment/environments/${{ github.event.inputs.environment }}
               run: |
                   RDS_ENDPOINT=$(terraform output -raw rds_endpoint 2>/dev/null || echo "")
@@ -66,17 +66,97 @@ jobs:
                     echo "Error: Could not retrieve RDS endpoint from Terraform"
                     exit 1
                   fi
+                  
+                  # Get VPC and subnet details for dynamic bastion creation
+                  VPC_ID=$(terraform output -raw vpc_id 2>/dev/null || echo "")
+                  PUBLIC_SUBNET=$(terraform output -json public_subnets 2>/dev/null | jq -r '.[0]' || echo "")
+                  PROCESSING_SG=$(terraform output -raw processing_security_group_id 2>/dev/null || echo "")
+                  
+                  if [ -z "$VPC_ID" ] || [ -z "$PUBLIC_SUBNET" ] || [ -z "$PROCESSING_SG" ]; then
+                    echo "Error: Could not retrieve required infrastructure details"
+                    exit 1
+                  fi
+                  
                   echo "RDS_ENDPOINT=${RDS_ENDPOINT}" >> $GITHUB_ENV
-                  echo "DATABASE_URL=postgresql://${{ secrets.DATALAYER_PG_USER }}:${{ secrets.DATALAYER_PG_PASSWORD }}@${RDS_ENDPOINT}/${{ vars.DATALAYER_PG_DB_NAME || 'grants_stack_indexer' }}" >> $GITHUB_ENV
+                  echo "VPC_ID=${VPC_ID}" >> $GITHUB_ENV
+                  echo "PUBLIC_SUBNET=${PUBLIC_SUBNET}" >> $GITHUB_ENV
+                  echo "PROCESSING_SG=${PROCESSING_SG}" >> $GITHUB_ENV
+                  echo "DATABASE_URL=postgresql://${{ secrets.DATALAYER_PG_USER }}:${{ secrets.DATALAYER_PG_PASSWORD }}@localhost:5433/${{ vars.DATALAYER_PG_DB_NAME || 'grants_stack_indexer' }}" >> $GITHUB_ENV
 
             - name: Install PostgreSQL client
               run: |
                   sudo apt-get update
-                  sudo apt-get install -y wget ca-certificates
+                  sudo apt-get install -y wget ca-certificates jq
                   wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
                   echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
                   sudo apt-get update
                   sudo apt-get install -y postgresql-client-15
+
+            - name: Generate SSH key pair for temporary bastion
+              run: |
+                  mkdir -p ~/.ssh
+                  ssh-keygen -t rsa -b 4096 -f ~/.ssh/bastion_key -N ""
+                  echo "SSH key pair generated for temporary bastion"
+
+            - name: Create temporary bastion host
+              run: |
+                  echo "Creating temporary bastion host..."
+                  
+                  # Create temporary key pair in AWS
+                  TEMP_KEY_NAME="temp-bastion-${{ github.run_id }}-${{ github.run_attempt }}"
+                  aws ec2 import-key-pair \
+                    --key-name "$TEMP_KEY_NAME" \
+                    --public-key-material fileb://~/.ssh/bastion_key.pub \
+                    --region ${{ vars.AWS_REGION }}
+                  
+                  # Launch bastion instance
+                  INSTANCE_ID=$(aws ec2 run-instances \
+                    --image-id ami-0c02fb55956c7d316 \
+                    --instance-type t3.micro \
+                    --key-name "$TEMP_KEY_NAME" \
+                    --security-group-ids ${{ env.PROCESSING_SG }} \
+                    --subnet-id ${{ env.PUBLIC_SUBNET }} \
+                    --associate-public-ip-address \
+                    --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=temp-restore-bastion-${{ github.run_id }}},{Key=Purpose,Value=database-restore},{Key=AutoDelete,Value=true}]' \
+                    --region ${{ vars.AWS_REGION }} \
+                    --query 'Instances[0].InstanceId' \
+                    --output text)
+                  
+                  echo "TEMP_KEY_NAME=$TEMP_KEY_NAME" >> $GITHUB_ENV
+                  echo "BASTION_INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_ENV
+                  echo "Bastion instance $INSTANCE_ID created"
+
+            - name: Wait for bastion to be ready
+              run: |
+                  echo "Waiting for bastion instance to be ready..."
+                  aws ec2 wait instance-running --instance-ids ${{ env.BASTION_INSTANCE_ID }} --region ${{ vars.AWS_REGION }}
+                  
+                  # Get public IP
+                  BASTION_IP=$(aws ec2 describe-instances \
+                    --instance-ids ${{ env.BASTION_INSTANCE_ID }} \
+                    --region ${{ vars.AWS_REGION }} \
+                    --query 'Reservations[0].Instances[0].PublicIpAddress' \
+                    --output text)
+                  
+                  echo "BASTION_IP=$BASTION_IP" >> $GITHUB_ENV
+                  echo "Bastion ready at IP: $BASTION_IP"
+                  
+                  # Wait for SSH to be ready
+                  echo "Waiting for SSH service to be ready..."
+                  for i in {1..30}; do
+                    if ssh -i ~/.ssh/bastion_key -o ConnectTimeout=5 -o StrictHostKeyChecking=no ec2-user@$BASTION_IP echo "SSH ready" 2>/dev/null; then
+                      echo "SSH connection established"
+                      break
+                    fi
+                    echo "Attempt $i/30: SSH not ready yet, waiting..."
+                    sleep 10
+                  done
+
+            - name: Setup SSH tunnel to RDS
+              run: |
+                  echo "Setting up SSH tunnel through temporary bastion host..."
+                  ssh -i ~/.ssh/bastion_key -o StrictHostKeyChecking=no -f -N -L 5433:${{ env.RDS_ENDPOINT }}:5432 ec2-user@${{ env.BASTION_IP }}
+                  echo "SSH tunnel established on localhost:5433"
 
             - name: Verify backup file exists
               run: |
@@ -92,13 +172,19 @@ jobs:
                   aws s3 cp "s3://${{ env.BACKUP_BUCKET }}/${{ github.event.inputs.backup_file }}" ./temp-backup/backup.sql
                   echo "✅ Backup file downloaded"
 
-            - name: Verify database connection
+            - name: Verify database connection through tunnel
               run: |
-                  if ! pg_isready -h "${{ env.RDS_ENDPOINT }}" -U "${{ secrets.DATALAYER_PG_USER }}"; then
-                    echo "Error: Cannot connect to database"
+                  echo "Testing database connection through SSH tunnel..."
+                  
+                  # Wait a moment for tunnel to be fully established
+                  sleep 5
+                  
+                  if pg_isready -h localhost -p 5433 -U "${{ secrets.DATALAYER_PG_USER }}"; then
+                    echo "✅ Database connection verified through SSH tunnel"
+                  else
+                    echo "❌ Failed to connect to database through SSH tunnel"
                     exit 1
                   fi
-                  echo "✅ Database connection verified"
 
             - name: Create database backup before restore
               run: |
@@ -184,6 +270,31 @@ jobs:
               run: |
                   rm -rf ./temp-backup
                   echo "✅ Temporary files cleaned up"
+
+            - name: Cleanup temporary bastion host
+              if: always()
+              run: |
+                  echo "Cleaning up temporary bastion host..."
+                  
+                  # Terminate bastion instance
+                  if [ -n "${{ env.BASTION_INSTANCE_ID }}" ]; then
+                    aws ec2 terminate-instances \
+                      --instance-ids ${{ env.BASTION_INSTANCE_ID }} \
+                      --region ${{ vars.AWS_REGION }}
+                    echo "Bastion instance ${{ env.BASTION_INSTANCE_ID }} terminated"
+                  fi
+                  
+                  # Delete temporary key pair
+                  if [ -n "${{ env.TEMP_KEY_NAME }}" ]; then
+                    aws ec2 delete-key-pair \
+                      --key-name ${{ env.TEMP_KEY_NAME }} \
+                      --region ${{ vars.AWS_REGION }}
+                    echo "Temporary key pair ${{ env.TEMP_KEY_NAME }} deleted"
+                  fi
+                  
+                  # Clean up local SSH keys
+                  rm -f ~/.ssh/bastion_key ~/.ssh/bastion_key.pub
+                  echo "✅ Temporary bastion host and keys cleaned up"
 
             - name: Restore summary
               run: |
