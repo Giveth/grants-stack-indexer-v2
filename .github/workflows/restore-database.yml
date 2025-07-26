@@ -113,6 +113,26 @@ jobs:
                   
                   echo "Using AMI ID: $AMI_ID"
                   
+                  # Create temporary security group for bastion SSH access
+                  TEMP_SG_NAME="temp-bastion-sg-${{ github.run_id }}-${{ github.run_attempt }}"
+                  TEMP_SG_ID=$(aws ec2 create-security-group \
+                    --group-name "$TEMP_SG_NAME" \
+                    --description "Temporary security group for database restore bastion" \
+                    --vpc-id ${{ env.VPC_ID }} \
+                    --region ${{ vars.AWS_REGION }} \
+                    --query 'GroupId' \
+                    --output text)
+                  
+                  # Add SSH inbound rule to the temporary security group
+                  aws ec2 authorize-security-group-ingress \
+                    --group-id "$TEMP_SG_ID" \
+                    --protocol tcp \
+                    --port 22 \
+                    --cidr 0.0.0.0/0 \
+                    --region ${{ vars.AWS_REGION }}
+                  
+                  echo "Temporary security group $TEMP_SG_ID created with SSH access"
+                  
                   # Create temporary key pair in AWS
                   TEMP_KEY_NAME="temp-bastion-${{ github.run_id }}-${{ github.run_attempt }}"
                   aws ec2 import-key-pair \
@@ -120,12 +140,12 @@ jobs:
                     --public-key-material fileb://~/.ssh/bastion_key.pub \
                     --region ${{ vars.AWS_REGION }}
                   
-                  # Launch bastion instance
+                  # Launch bastion instance with temporary security group
                   INSTANCE_ID=$(aws ec2 run-instances \
                     --image-id "$AMI_ID" \
                     --instance-type t3.micro \
                     --key-name "$TEMP_KEY_NAME" \
-                    --security-group-ids ${{ env.PROCESSING_SG }} \
+                    --security-group-ids "$TEMP_SG_ID" \
                     --subnet-id ${{ env.PUBLIC_SUBNET }} \
                     --associate-public-ip-address \
                     --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=temp-restore-bastion-${{ github.run_id }}},{Key=Purpose,Value=database-restore},{Key=AutoDelete,Value=true}]' \
@@ -134,8 +154,9 @@ jobs:
                     --output text)
                   
                   echo "TEMP_KEY_NAME=$TEMP_KEY_NAME" >> $GITHUB_ENV
+                  echo "TEMP_SG_ID=$TEMP_SG_ID" >> $GITHUB_ENV
                   echo "BASTION_INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_ENV
-                  echo "Bastion instance $INSTANCE_ID created"
+                  echo "Bastion instance $INSTANCE_ID created with security group $TEMP_SG_ID"
 
             - name: Wait for bastion to be ready
               run: |
@@ -319,6 +340,18 @@ jobs:
                       --instance-ids ${{ env.BASTION_INSTANCE_ID }} \
                       --region ${{ vars.AWS_REGION }}
                     echo "Bastion instance ${{ env.BASTION_INSTANCE_ID }} terminated"
+                    
+                    # Wait for instance to terminate before deleting security group
+                    echo "Waiting for instance to terminate..."
+                    aws ec2 wait instance-terminated --instance-ids ${{ env.BASTION_INSTANCE_ID }} --region ${{ vars.AWS_REGION }}
+                  fi
+                  
+                  # Delete temporary security group
+                  if [ -n "${{ env.TEMP_SG_ID }}" ]; then
+                    aws ec2 delete-security-group \
+                      --group-id ${{ env.TEMP_SG_ID }} \
+                      --region ${{ vars.AWS_REGION }}
+                    echo "Temporary security group ${{ env.TEMP_SG_ID }} deleted"
                   fi
                   
                   # Delete temporary key pair
@@ -331,7 +364,7 @@ jobs:
                   
                   # Clean up local SSH keys
                   rm -f ~/.ssh/bastion_key ~/.ssh/bastion_key.pub
-                  echo "✅ Temporary bastion host and keys cleaned up"
+                  echo "✅ Temporary bastion host, security group, and keys cleaned up"
 
             - name: Restore summary
               run: |
