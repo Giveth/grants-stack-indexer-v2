@@ -48,8 +48,8 @@ module "ecs" {
         load_balancer = {
           service = {
             target_group_arn = var.api_target_group_arn
-            container_name   = local.api_container_name
-            container_port   = 3000
+            container_name   = "indexer-graphql-api"
+            container_port   = 8080
           }
         }
       }
