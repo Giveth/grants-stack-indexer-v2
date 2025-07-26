@@ -20,15 +20,9 @@ jobs:
             TF_VAR_AWS_REGION: ${{ vars.AWS_REGION }}
             TF_VAR_APP_NAME: ${{ vars.APP_NAME }}
             TF_VAR_APP_ENVIRONMENT: ${{ github.event.inputs.environment }}
-            #Database
+            # Database credentials
             TF_VAR_DATALAYER_PG_USER: ${{ secrets.DATALAYER_PG_USER }}
             TF_VAR_DATALAYER_PG_PASSWORD: ${{ secrets.DATALAYER_PG_PASSWORD }}
-            #Hasura API
-            TF_VAR_GREEN_DATALAYER_HASURA_ADMIN_SECRET: ${{ secrets.DATALAYER_HASURA_ADMIN_SECRET }}
-            TF_VAR_BLUE_DATALAYER_HASURA_ADMIN_SECRET: ${{ secrets.DATALAYER_HASURA_ADMIN_SECRET }}
-            #Coingecko API
-            TF_VAR_GREEN_COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
-            TF_VAR_BLUE_COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
         steps:
             - name: Check out github repository
               uses: actions/checkout@v4
@@ -62,18 +56,31 @@ jobs:
                     -backend-config="region=${{ vars.AWS_REGION }}" \
                     -backend-config="encrypt=true"
 
-            - name: Terraform Apply
+            - name: Terraform Destroy
               working-directory: deployment/environments/${{ github.event.inputs.environment }}
               run: |
-                  # Validate that TERRAFORM_VARS is valid JSON.
+                  # Validate that TERRAFORM_VARS is valid JSON
                   if ! jq empty <<< "$TERRAFORM_VARS" >/dev/null 2>&1; then
                     echo "Error: TERRAFORM_VARS is not valid JSON."
                     exit 1
                   fi
-                  # Write the contents of TERRAFORM_VARS to tfvars.json.
-                  cat <<< "$TERRAFORM_VARS" > tfvars.json
-                  active_deployment=$(terraform output -raw active_deployment)
-                  deployment_state=$(terraform output -raw deployment_state)
-                  terraform destroy -var-file=tfvars.json -auto-approve -var="DEPLOYMENT_STATE=$deployment_state" -var="ACTIVE_DEPLOYMENT=$active_deployment"
+                  # Extract only BLUE variables for simplified deployment (excluding COINGECKO_API_KEY which is a separate secret)
+                  echo "$TERRAFORM_VARS" | jq '{
+                    BLUE_CHAINS: .BLUE_CHAINS,
+                    BLUE_COINGECKO_API_TYPE: .BLUE_COINGECKO_API_TYPE,
+                    BLUE_PRICING_SOURCE: .BLUE_PRICING_SOURCE,
+                    BLUE_METADATA_SOURCE: .BLUE_METADATA_SOURCE,
+                    BLUE_PUBLIC_GATEWAY_URLS: .BLUE_PUBLIC_GATEWAY_URLS,
+                    BLUE_LOG_LEVEL: .BLUE_LOG_LEVEL,
+                    BLUE_INDEXER_GRAPHQL_URL: .BLUE_INDEXER_GRAPHQL_URL,
+                    BLUE_DATALAYER_PG_DB_NAME: .BLUE_DATALAYER_PG_DB_NAME
+                  }' > tfvars.json
+                  # Add the separate COINGECKO_API_KEY secret
+                  jq --arg coingecko_key "${{ secrets.COINGECKO_API_KEY }}" '. + {BLUE_COINGECKO_API_KEY: $coingecko_key}' tfvars.json > tfvars_temp.json && mv tfvars_temp.json tfvars.json
+                  # Show what variables we extracted
+                  echo "Extracted variables for simplified deployment destroy:"
+                  cat tfvars.json
+                  # Destroy the simplified deployment
+                  terraform destroy -var-file=tfvars.json -auto-approve
               env:
-                  TERRAFORM_VARS: ${{ vars.TERRAFORM_VARS }}
+                  TERRAFORM_VARS: ${{ secrets.TERRAFORM_VARS }}
