@@ -87,7 +87,7 @@ module "simple_compute" {
   coingecko_api_type            = "pro"
   log_level                     = "info"
   indexer_graphql_url           = "http://localhost:8080/v1/graphql"
-  private_subnets               = module.vpc.private_subnets
+  private_subnets               = module.networking.private_subnets
   target_group_arn              = module.simple_load_balancer.api_target_group_arn
   alb_listener_arn              = module.simple_load_balancer.listener_arn
 }
