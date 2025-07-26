@@ -298,16 +298,22 @@ jobs:
                   
                   DB_NAME="${{ vars.DATALAYER_PG_DB_NAME || 'grants_stack_indexer' }}"
                   
-                  POSTGRES_URL="postgresql://${{ secrets.DATALAYER_PG_USER }}:${{ secrets.DATALAYER_PG_PASSWORD }}@${{ env.RDS_ENDPOINT }}/postgres"
+                  # Use SSH tunnel connection (localhost:5433) instead of direct RDS connection
+                  POSTGRES_URL="postgresql://${{ secrets.DATALAYER_PG_USER }}:${{ secrets.DATALAYER_PG_PASSWORD }}@localhost:5433/postgres"
                   
-                  psql "$POSTGRES_URL" -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${DB_NAME}' AND pid <> pg_backend_pid();"
+                  echo "Terminating existing connections to database '${DB_NAME}'..."
+                  psql "$POSTGRES_URL" -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${DB_NAME}' AND pid <> pg_backend_pid();" || true
                   
+                  echo "Dropping database '${DB_NAME}' if it exists..."
                   psql "$POSTGRES_URL" -c "DROP DATABASE IF EXISTS ${DB_NAME};"
+                  
+                  echo "Creating database '${DB_NAME}'..."
                   psql "$POSTGRES_URL" -c "CREATE DATABASE ${DB_NAME};"
                   
+                  echo "Restoring data from backup file..."
                   psql "${{ env.DATABASE_URL }}" < ./temp-backup/backup.sql
                   
-                  echo "✅ Database restore completed"
+                  echo "✅ Database restore completed successfully"
 
             - name: Restart ECS services
               run: |
