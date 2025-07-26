@@ -341,6 +341,10 @@ resource "aws_ecs_task_definition" "processing_tasks" {
           value = var.log_level
         },
         {
+          name  = "CHAINS"
+          value = jsonencode(var.CHAINS)
+        },
+        {
           name  = "INDEXER_GRAPHQL_URL"
           value = var.indexer_graphql_url
         }
