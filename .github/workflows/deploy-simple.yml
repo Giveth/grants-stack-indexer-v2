@@ -68,10 +68,9 @@ jobs:
                     echo "Error: TERRAFORM_VARS is not valid JSON."
                     exit 1
                   fi
-                  # Extract only BLUE variables for simplified deployment
+                  # Extract only BLUE variables for simplified deployment (excluding COINGECKO_API_KEY which is a separate secret)
                   echo "$TERRAFORM_VARS" | jq '{
                     BLUE_CHAINS: .BLUE_CHAINS,
-                    BLUE_COINGECKO_API_KEY: .BLUE_COINGECKO_API_KEY,
                     BLUE_COINGECKO_API_TYPE: .BLUE_COINGECKO_API_TYPE,
                     BLUE_PRICING_SOURCE: .BLUE_PRICING_SOURCE,
                     BLUE_METADATA_SOURCE: .BLUE_METADATA_SOURCE,
@@ -80,6 +79,8 @@ jobs:
                     BLUE_INDEXER_GRAPHQL_URL: .BLUE_INDEXER_GRAPHQL_URL,
                     BLUE_DATALAYER_PG_DB_NAME: .BLUE_DATALAYER_PG_DB_NAME
                   }' > tfvars.json
+                  # Add the separate COINGECKO_API_KEY secret
+                  jq --arg coingecko_key "${{ secrets.COINGECKO_API_KEY }}" '. + {BLUE_COINGECKO_API_KEY: $coingecko_key}' tfvars.json > tfvars_temp.json && mv tfvars_temp.json tfvars.json
                   # Show what variables we extracted
                   echo "Extracted variables for simplified deployment:"
                   cat tfvars.json
