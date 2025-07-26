@@ -102,6 +102,17 @@ jobs:
               run: |
                   echo "Creating temporary bastion host..."
                   
+                  # Get the latest Amazon Linux 2 AMI for the current region
+                  AMI_ID=$(aws ec2 describe-images \
+                    --owners amazon \
+                    --filters 'Name=name,Values=amzn2-ami-hvm-*-x86_64-gp2' \
+                              'Name=state,Values=available' \
+                    --query 'Images | sort_by(@, &CreationDate) | [-1].ImageId' \
+                    --output text \
+                    --region ${{ vars.AWS_REGION }})
+                  
+                  echo "Using AMI ID: $AMI_ID"
+                  
                   # Create temporary key pair in AWS
                   TEMP_KEY_NAME="temp-bastion-${{ github.run_id }}-${{ github.run_attempt }}"
                   aws ec2 import-key-pair \
@@ -111,7 +122,7 @@ jobs:
                   
                   # Launch bastion instance
                   INSTANCE_ID=$(aws ec2 run-instances \
-                    --image-id ami-0c02fb55956c7d316 \
+                    --image-id "$AMI_ID" \
                     --instance-type t3.micro \
                     --key-name "$TEMP_KEY_NAME" \
                     --security-group-ids ${{ env.PROCESSING_SG }} \
