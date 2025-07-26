@@ -152,22 +152,48 @@ jobs:
                   echo "BASTION_IP=$BASTION_IP" >> $GITHUB_ENV
                   echo "Bastion ready at IP: $BASTION_IP"
                   
-                  # Wait for SSH to be ready
+                  # Wait for SSH to be ready with better error handling
                   echo "Waiting for SSH service to be ready..."
-                  for i in {1..30}; do
-                    if ssh -i ~/.ssh/bastion_key -o ConnectTimeout=5 -o StrictHostKeyChecking=no ec2-user@$BASTION_IP echo "SSH ready" 2>/dev/null; then
-                      echo "SSH connection established"
+                  SSH_READY=false
+                  for i in {1..60}; do
+                    echo "Attempt $i/60: Testing SSH connection..."
+                    if timeout 10 ssh -i ~/.ssh/bastion_key -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ec2-user@$BASTION_IP echo "SSH ready" 2>/dev/null; then
+                      echo "✅ SSH connection established successfully"
+                      SSH_READY=true
                       break
                     fi
-                    echo "Attempt $i/30: SSH not ready yet, waiting..."
+                    echo "SSH not ready yet, waiting 10 seconds..."
                     sleep 10
                   done
+                  
+                  if [ "$SSH_READY" = "false" ]; then
+                    echo "❌ SSH connection failed after 10 minutes. Checking instance status..."
+                    aws ec2 describe-instances --instance-ids ${{ env.BASTION_INSTANCE_ID }} --region ${{ vars.AWS_REGION }}
+                    exit 1
+                  fi
 
             - name: Setup SSH tunnel to RDS
               run: |
                   echo "Setting up SSH tunnel through temporary bastion host..."
-                  ssh -i ~/.ssh/bastion_key -o StrictHostKeyChecking=no -f -N -L 5433:${{ env.RDS_ENDPOINT }}:5432 ec2-user@${{ env.BASTION_IP }}
-                  echo "SSH tunnel established on localhost:5433"
+                  
+                  # Extract just the hostname from RDS endpoint (remove port if present)
+                  RDS_HOST=$(echo "${{ env.RDS_ENDPOINT }}" | cut -d':' -f1)
+                  echo "RDS Host: $RDS_HOST"
+                  echo "Bastion IP: ${{ env.BASTION_IP }}"
+                  
+                  # Create SSH tunnel: localhost:5433 -> bastion -> RDS:5432
+                  ssh -i ~/.ssh/bastion_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -f -N -L 5433:${RDS_HOST}:5432 ec2-user@${{ env.BASTION_IP }}
+                  
+                  echo "✅ SSH tunnel established: localhost:5433 -> bastion -> ${RDS_HOST}:5432"
+                  
+                  # Verify tunnel is working
+                  sleep 2
+                  if netstat -tuln | grep :5433; then
+                    echo "✅ Tunnel is listening on port 5433"
+                  else
+                    echo "❌ Tunnel setup failed - port 5433 not listening"
+                    exit 1
+                  fi
 
             - name: Verify backup file exists
               run: |
