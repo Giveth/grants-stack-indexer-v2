@@ -315,10 +315,15 @@ jobs:
                   # Check if backup file is custom format or plain SQL
                   if file ./temp-backup/backup.sql | grep -q "PostgreSQL custom database dump"; then
                     echo "Detected PostgreSQL custom format dump, using pg_restore..."
+                    
+                    # Set password environment variable for pg_restore
+                    export PGPASSWORD="${{ secrets.DATALAYER_PG_PASSWORD }}"
+                    
                     pg_restore --host=localhost --port=5433 \
                       --username="${{ secrets.DATALAYER_PG_USER }}" \
                       --dbname="${DB_NAME}" \
                       --verbose --clean --no-owner --no-privileges \
+                      --no-password \
                       ./temp-backup/backup.sql
                   else
                     echo "Detected plain SQL format, using psql..."
