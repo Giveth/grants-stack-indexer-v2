@@ -120,3 +120,9 @@ variable "log_level" {
   type        = string
   default     = "info"
 }
+
+variable "indexer_graphql_url" {
+  description = "GraphQL endpoint URL for the indexer"
+  type        = string
+  default     = "http://localhost:3000/graphql"
+}

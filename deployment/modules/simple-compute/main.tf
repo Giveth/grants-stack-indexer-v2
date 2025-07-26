@@ -157,6 +157,10 @@ resource "aws_ecs_task_definition" "api_task" {
         {
           name  = "CHAINS"
           value = jsonencode(var.CHAINS)
+        },
+        {
+          name  = "INDEXER_GRAPHQL_URL"
+          value = var.indexer_graphql_url
         }
       ]
 

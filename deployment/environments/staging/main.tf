@@ -83,8 +83,9 @@ module "simple_compute" {
   coingecko_api_key             = var.BLUE_COINGECKO_API_KEY
   pricing_source                = "coingecko"
   metadata_source               = "public-gateway"
-  public_gateway_urls           = ["https://ipfs.io/ipfs/", "https://gateway.pinata.cloud/ipfs/"]
-  coingecko_api_type            = "demo"
+  public_gateway_urls           = ["https://ipfs.io", "https://dweb.link", "https://cloudflare-ipfs.com", "https://gateway.pinata.cloud", "https://ipfs.infura.io", "https://ipfs.fleek.co", "https://ipfs.eth.aragon.network", "https://ipfs.jes.xxx", "https://ipfs.lol", "https://ipfs.mle.party"]
+  coingecko_api_type            = "pro"
   log_level                     = "info"
+  indexer_graphql_url           = "https://indexer.dev.hyperindex.xyz/e6a0458/v1/graphql"
 }
 

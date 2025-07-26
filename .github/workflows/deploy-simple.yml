@@ -34,7 +34,7 @@ jobs:
             # TF_VAR_SSL_CERTIFICATE_ARN: Not used in simplified deployment
             # TF_VAR_REDIS_URL: Not used in simplified deployment
             # Chains configuration
-            TF_VAR_BLUE_CHAINS: ${{ vars.CHAINS || '[]' }}
+            TF_VAR_BLUE_CHAINS: ${{ vars.CHAINS || '[{"id":1,"name":"Ethereum Mainnet","rpcUrls":["https://eth.llamarpc.com"],"fetchLimit":100,"fetchDelayMs":1000}]' }}
             # API Keys
             TF_VAR_BLUE_COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
 
