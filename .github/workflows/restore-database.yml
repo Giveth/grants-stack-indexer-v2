@@ -311,7 +311,19 @@ jobs:
                   psql "$POSTGRES_URL" -c "CREATE DATABASE ${DB_NAME};"
                   
                   echo "Restoring data from backup file..."
-                  psql "${{ env.DATABASE_URL }}" < ./temp-backup/backup.sql
+                  
+                  # Check if backup file is custom format or plain SQL
+                  if file ./temp-backup/backup.sql | grep -q "PostgreSQL custom database dump"; then
+                    echo "Detected PostgreSQL custom format dump, using pg_restore..."
+                    pg_restore --host=localhost --port=5433 \
+                      --username="${{ secrets.DATALAYER_PG_USER }}" \
+                      --dbname="${DB_NAME}" \
+                      --verbose --clean --no-owner --no-privileges \
+                      ./temp-backup/backup.sql
+                  else
+                    echo "Detected plain SQL format, using psql..."
+                    psql "${{ env.DATABASE_URL }}" < ./temp-backup/backup.sql
+                  fi
                   
                   echo "✅ Database restore completed successfully"
 
