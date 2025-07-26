@@ -210,7 +210,7 @@ resource "aws_ecs_task_definition" "processing_tasks" {
       
       command = ["npm", "run", "process", "--", "--chain", each.value.id]
 
-      environment = concat([
+      environment = [
         {
           name  = "NODE_ENV"
           value = var.app_environment
@@ -226,8 +226,36 @@ resource "aws_ecs_task_definition" "processing_tasks" {
         {
           name  = "CHAIN_ID"
           value = tostring(each.value.id)
+        },
+        {
+          name  = "PRICING_SOURCE"
+          value = var.pricing_source
+        },
+        {
+          name  = "COINGECKO_API_KEY"
+          value = var.coingecko_api_key
+        },
+        {
+          name  = "COINGECKO_API_TYPE"
+          value = var.coingecko_api_type
+        },
+        {
+          name  = "METADATA_SOURCE"
+          value = var.metadata_source
+        },
+        {
+          name  = "PUBLIC_GATEWAY_URLS"
+          value = jsonencode(var.public_gateway_urls)
+        },
+        {
+          name  = "LOG_LEVEL"
+          value = var.log_level
+        },
+        {
+          name  = "INDEXER_GRAPHQL_URL"
+          value = var.indexer_graphql_url
         }
-      ], each.value.env_vars)
+      ]
 
       logConfiguration = {
         logDriver = "awslogs"
