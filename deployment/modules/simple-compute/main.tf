@@ -94,7 +94,7 @@ resource "aws_ecs_task_definition" "api_task" {
   family                   = "${var.app_name}-${var.app_environment}-api"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = 1536
+  cpu                      = 1024
   memory                   = 3072
   execution_role_arn       = var.ecs_task_execution_role_arn
   task_role_arn            = var.ecs_task_role_arn
