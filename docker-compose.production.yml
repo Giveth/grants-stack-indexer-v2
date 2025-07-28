@@ -32,10 +32,14 @@ services:
       dockerfile: Dockerfile
       target: processing
     restart: unless-stopped
-    volumes:
-      - ./ca-certificate.crt:/app/ca-certificate.crt:ro
     environment:
-      - DATABASE_URL=postgresql://${DATALAYER_PG_USER}:${DATALAYER_PG_PASSWORD}@${DATALAYER_PG_HOST}:${DATALAYER_PG_PORT}/${DATALAYER_PG_DATABASE}?sslmode=require&sslrootcert=/app/ca-certificate.crt
+      - DATABASE_URL=postgresql://${DATALAYER_PG_USER}:${DATALAYER_PG_PASSWORD}@${DATALAYER_PG_HOST}:${DATALAYER_PG_PORT}/${DATALAYER_PG_DATABASE}?sslmode=require
+      # SSL bypass for DigitalOcean managed database
+      - PGSSLMODE=require
+      - PGSSLCERT=
+      - PGSSLKEY=
+      - PGSSLROOTCERT=
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
       - INDEXER_GRAPHQL_URL=http://indexer-graphql-api:8080/v1/graphql
       - INDEXER_ADMIN_SECRET=${HASURA_GRAPHQL_ADMIN_SECRET}
       - CHAINS=${CHAINS}
@@ -94,10 +98,14 @@ services:
     container_name: indexer-graphql-api
     image: hasura/graphql-engine:v2.43.0
     restart: unless-stopped
-    volumes:
-      - ./ca-certificate.crt:/app/ca-certificate.crt:ro
     environment:
-      HASURA_GRAPHQL_DATABASE_URL: postgresql://${ENVIO_PG_USER}:${ENVIO_PG_PASSWORD}@${ENVIO_PG_HOST}:${ENVIO_PG_PORT}/${ENVIO_PG_DATABASE}?sslmode=require&sslrootcert=/app/ca-certificate.crt
+      HASURA_GRAPHQL_DATABASE_URL: postgresql://${ENVIO_PG_USER}:${ENVIO_PG_PASSWORD}@${ENVIO_PG_HOST}:${ENVIO_PG_PORT}/${ENVIO_PG_DATABASE}?sslmode=require
+      # SSL bypass for DigitalOcean managed database
+      PGSSLMODE: require
+      PGSSLCERT: ""
+      PGSSLKEY: ""
+      PGSSLROOTCERT: ""
+      NODE_TLS_REJECT_UNAUTHORIZED: "0"
       HASURA_GRAPHQL_ENABLE_CONSOLE: "false"
       HASURA_GRAPHQL_ADMIN_SECRET: ${HASURA_GRAPHQL_ADMIN_SECRET}
       HASURA_GRAPHQL_UNAUTHORIZED_ROLE: ${HASURA_GRAPHQL_UNAUTHORIZED_ROLE}
@@ -122,8 +130,6 @@ services:
       context: ./apps/indexer
       dockerfile: Dockerfile
     restart: unless-stopped
-    volumes:
-      - ./ca-certificate.crt:/app/ca-certificate.crt:ro
     environment:
       - ENVIO_PG_HOST=${ENVIO_PG_HOST}
       - ENVIO_PG_PORT=${ENVIO_PG_PORT}
@@ -132,9 +138,12 @@ services:
       - ENVIO_PG_DATABASE=${ENVIO_PG_DATABASE}
       - HASURA_GRAPHQL_ENDPOINT=http://indexer-graphql-api:8080/v1/metadata
       - TUI_OFF=true
-      # SSL configuration with proper CA certificate
+      # SSL bypass for DigitalOcean managed database
       - PGSSLMODE=require
-      - PGSSLROOTCERT=/app/ca-certificate.crt
+      - PGSSLCERT=
+      - PGSSLKEY=
+      - PGSSLROOTCERT=
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
     networks:
       - indexer
     depends_on:
