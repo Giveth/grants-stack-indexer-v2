@@ -5,10 +5,11 @@ if [ -f .env.production ]; then
     export $(cat .env.production | grep -v '^#' | xargs)
 fi
 
-# Download DigitalOcean CA certificate if it doesn't exist
+# Check if CA certificate exists
 if [ ! -f "ca-certificate.crt" ]; then
-    echo "Downloading DigitalOcean CA certificate..."
-    curl -o ca-certificate.crt https://raw.githubusercontent.com/digitalocean/certificate-authority/master/certs/ca-certificate.crt
+    echo "❌ Error: ca-certificate.crt not found"
+    echo "Please ensure the DigitalOcean CA certificate is available as ca-certificate.crt"
+    exit 1
 fi
 
 # Construct DATABASE_URL with proper SSL configuration for DigitalOcean

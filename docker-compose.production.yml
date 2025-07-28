@@ -32,6 +32,8 @@ services:
       dockerfile: Dockerfile
       target: processing
     restart: unless-stopped
+    volumes:
+      - ./ca-certificate.crt:/app/ca-certificate.crt:ro
     environment:
       - DATABASE_URL=postgresql://${DATALAYER_PG_USER}:${DATALAYER_PG_PASSWORD}@${DATALAYER_PG_HOST}:${DATALAYER_PG_PORT}/${DATALAYER_PG_DATABASE}
       - INDEXER_GRAPHQL_URL=http://indexer-graphql-api:8080/v1/graphql
@@ -112,6 +114,8 @@ services:
       context: ./apps/indexer
       dockerfile: Dockerfile
     restart: unless-stopped
+    volumes:
+      - ./ca-certificate.crt:/app/ca-certificate.crt:ro
     environment:
       - ENVIO_PG_HOST=${ENVIO_PG_HOST}
       - ENVIO_PG_PORT=${ENVIO_PG_PORT}
@@ -120,6 +124,9 @@ services:
       - ENVIO_PG_DATABASE=${ENVIO_PG_DATABASE}
       - HASURA_GRAPHQL_ENDPOINT=http://indexer-graphql-api:8080/v1/metadata
       - TUI_OFF=true
+      # SSL configuration with proper CA certificate
+      - PGSSLMODE=require
+      - PGSSLROOTCERT=/app/ca-certificate.crt
     networks:
       - indexer
     depends_on:
