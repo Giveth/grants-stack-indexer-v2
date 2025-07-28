@@ -19,15 +19,6 @@
         -Server
     }
 
-    # Rate limiting
-    rate_limit {
-        zone static_api {
-            key {remote_host}
-            events 100
-            window 1m
-        }
-    }
-
     # Main GraphQL API
     handle /v1/* {
         reverse_proxy datalayer-graphql-api:8080 {
@@ -81,15 +72,6 @@ indexer.{$DOMAIN} {
         X-XSS-Protection "1; mode=block"
         Referrer-Policy strict-origin-when-cross-origin
         -Server
-    }
-
-    # Rate limiting for indexer API
-    rate_limit {
-        zone indexer_api {
-            key {remote_host}
-            events 200
-            window 1m
-        }
     }
 
     # Indexer GraphQL API
