@@ -1,8 +1,6 @@
 # Main API endpoint - Datalayer GraphQL
 {$DOMAIN} {
-    # Enable automatic HTTPS
-    tls {$EMAIL}
-    
+
     # Security headers
     header {
         # Enable HSTS
@@ -62,7 +60,7 @@
 
 # Indexer API subdomain
 indexer.{$DOMAIN} {
-    tls {$EMAIL}
+
     
     # Security headers (same as above)
     header {
@@ -100,7 +98,7 @@ indexer.{$DOMAIN} {
 
 # Optional: Admin interface (only accessible from specific IPs)
 admin.{$DOMAIN} {
-    tls {$EMAIL}
+
     
     # Restrict access to admin interface
     @allowed {
