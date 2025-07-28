@@ -21,6 +21,20 @@ export PGSSLROOTCERT=""
 # Temporarily disable SSL certificate verification for Node.js
 export NODE_TLS_REJECT_UNAUTHORIZED=0
 
+# Check if required environment variables are set
+if [[ "${DATALAYER_PG_HOST}" == "your-datalayer-db-host.db.ondigitalocean.com" ]] || [[ -z "${DATALAYER_PG_HOST}" ]]; then
+    echo "❌ Error: Environment variables not properly loaded from .env.production"
+    echo "Please check that .env.production exists and contains real values (not placeholders)"
+    exit 1
+fi
+
+# Check if pnpm is installed
+if ! command -v pnpm &> /dev/null; then
+    echo "❌ Error: pnpm is not installed"
+    echo "Installing pnpm..."
+    npm install -g pnpm
+fi
+
 echo "Running database migrations..."
 echo "Database: ${DATALAYER_PG_HOST}:${DATALAYER_PG_PORT}/${DATALAYER_PG_DATABASE}"
 echo "⚠️  SSL certificate verification is disabled"
