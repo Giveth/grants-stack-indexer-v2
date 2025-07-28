@@ -13,7 +13,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-COMPOSE_FILE="docker-compose.production.yml"
+COMPOSE_FILE="docker compose.production.yml"
 ENV_FILE=".env"
 
 # Functions
@@ -85,19 +85,19 @@ build_and_deploy() {
     
     # Pull latest images
     log_info "Pulling latest Docker images..."
-    docker-compose -f $COMPOSE_FILE pull
+    docker compose -f $COMPOSE_FILE pull
     
     # Build custom images
     log_info "Building custom application images..."
-    docker-compose -f $COMPOSE_FILE build --no-cache
+    docker compose -f $COMPOSE_FILE build --no-cache
     
     # Stop existing containers
     log_info "Stopping existing containers..."
-    docker-compose -f $COMPOSE_FILE down
+    docker compose -f $COMPOSE_FILE down
     
     # Start services
     log_info "Starting services..."
-    docker-compose -f $COMPOSE_FILE up -d
+    docker compose -f $COMPOSE_FILE up -d
     
     log_success "Application deployed!"
 }
@@ -109,10 +109,10 @@ check_health() {
     sleep 30
     
     # Check if containers are running
-    if docker-compose -f $COMPOSE_FILE ps | grep -q "Up"; then
+    if docker compose -f $COMPOSE_FILE ps | grep -q "Up"; then
         log_success "Containers are running!"
     else
-        log_error "Some containers failed to start. Check logs with: docker-compose -f $COMPOSE_FILE logs"
+        log_error "Some containers failed to start. Check logs with: docker compose -f $COMPOSE_FILE logs"
         exit 1
     fi
     
@@ -127,11 +127,11 @@ check_health() {
 show_status() {
     log_info "Current deployment status:"
     echo ""
-    docker-compose -f $COMPOSE_FILE ps
+    docker compose -f $COMPOSE_FILE ps
     echo ""
-    log_info "To view logs: docker-compose -f $COMPOSE_FILE logs -f [service_name]"
-    log_info "To restart: docker-compose -f $COMPOSE_FILE restart [service_name]"
-    log_info "To stop all: docker-compose -f $COMPOSE_FILE down"
+    log_info "To view logs: docker compose -f $COMPOSE_FILE logs -f [service_name]"
+    log_info "To restart: docker compose -f $COMPOSE_FILE restart [service_name]"
+    log_info "To stop all: docker compose -f $COMPOSE_FILE down"
 }
 
 # Main execution
@@ -149,23 +149,23 @@ case "${1:-deploy}" in
         show_status
         ;;
     "logs")
-        docker-compose -f $COMPOSE_FILE logs -f "${2:-}"
+        docker compose -f $COMPOSE_FILE logs -f "${2:-}"
         ;;
     "restart")
         log_info "Restarting services..."
-        docker-compose -f $COMPOSE_FILE restart "${2:-}"
+        docker compose -f $COMPOSE_FILE restart "${2:-}"
         log_success "Services restarted!"
         ;;
     "stop")
         log_info "Stopping all services..."
-        docker-compose -f $COMPOSE_FILE down
+        docker compose -f $COMPOSE_FILE down
         log_success "All services stopped!"
         ;;
     "update")
         log_info "Updating deployment..."
-        docker-compose -f $COMPOSE_FILE pull
-        docker-compose -f $COMPOSE_FILE build --no-cache
-        docker-compose -f $COMPOSE_FILE up -d
+        docker compose -f $COMPOSE_FILE pull
+        docker compose -f $COMPOSE_FILE build --no-cache
+        docker compose -f $COMPOSE_FILE up -d
         check_health
         log_success "Update completed!"
         ;;
