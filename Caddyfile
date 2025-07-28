@@ -1,6 +1,5 @@
 # Main API endpoint - Datalayer GraphQL
 {$DOMAIN} {
-
     # Security headers
     header {
         # Enable HSTS
@@ -60,8 +59,6 @@
 
 # Indexer API subdomain
 indexer.{$DOMAIN} {
-
-    
     # Security headers (same as above)
     header {
         Strict-Transport-Security max-age=31536000;
@@ -98,8 +95,6 @@ indexer.{$DOMAIN} {
 
 # Optional: Admin interface (only accessible from specific IPs)
 admin.{$DOMAIN} {
-
-    
     # Restrict access to admin interface
     @allowed {
         remote_ip {$ADMIN_IPS}
