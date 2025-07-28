@@ -1,8 +1,11 @@
 #!/bin/bash
 
-# Load environment variables
+# Load environment variables safely
 if [ -f .env.production ]; then
-    export $(cat .env.production | grep -v '^#' | xargs)
+    echo "Loading environment variables from .env.production..."
+    set -a  # automatically export all variables
+    source .env.production
+    set +a  # disable automatic export
 fi
 
 # Use SSL but don't verify certificates - works with DigitalOcean managed databases
@@ -22,6 +25,8 @@ echo "Running database migrations..."
 echo "Database: ${DATALAYER_PG_HOST}:${DATALAYER_PG_PORT}/${DATALAYER_PG_DATABASE}"
 echo "⚠️  SSL certificate verification is disabled"
 
+# Step 1: Cache migrations
+echo "Step 1: Running cache migrations..."
 cd scripts/migrations
 
 # Install dependencies if needed
@@ -30,7 +35,27 @@ if [ ! -d "node_modules" ]; then
     pnpm install
 fi
 
-# Run migrations
+# Run cache migrations
+pnpm db:cache:migrate
+
+# Step 2: Bootstrap
+echo "Step 2: Running bootstrap..."
+cd ../bootstrap
+
+# Install dependencies if needed
+if [ ! -d "node_modules" ]; then
+    echo "Installing bootstrap dependencies..."
+    pnpm install
+fi
+
+# Run bootstrap
+pnpm bootstrap:all
+
+# Step 3: Main database migrations
+echo "Step 3: Running main database migrations..."
+cd ../migrations
+
+# Run main migrations
 pnpm db:migrate
 
-echo "Migrations completed!"
+echo "All migrations completed successfully!"
