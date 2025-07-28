@@ -41,13 +41,7 @@ check_requirements() {
         log_error "Docker is not installed. Please install Docker first."
         exit 1
     fi
-    
-    # Check if Docker Compose is installed
-    if ! command -v docker-compose &> /dev/null; then
-        log_error "Docker Compose is not installed. Please install Docker Compose first."
-        exit 1
-    fi
-    
+
     # Check if .env file exists
     if [ ! -f "$ENV_FILE" ]; then
         log_error ".env file not found. Please copy .env.production to .env and configure it."
