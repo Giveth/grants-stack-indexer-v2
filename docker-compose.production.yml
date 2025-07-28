@@ -6,6 +6,9 @@ services:
     container_name: caddy
     image: caddy:2.7-alpine
     restart: unless-stopped
+    environment:
+      - DOMAIN=${DOMAIN}
+      - EMAIL=${EMAIL}
     ports:
       - "80:80"
       - "443:443"
