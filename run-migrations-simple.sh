@@ -5,9 +5,15 @@ if [ -f .env.production ]; then
     export $(cat .env.production | grep -v '^#' | xargs)
 fi
 
-# Use sslmode=require but disable certificate verification
-# This is less secure but works with DigitalOcean's managed databases
+# Use SSL but don't verify certificates - works with DigitalOcean managed databases
+# This accepts any SSL certificate without verification
 export DATABASE_URL="postgresql://${DATALAYER_PG_USER}:${DATALAYER_PG_PASSWORD}@${DATALAYER_PG_HOST}:${DATALAYER_PG_PORT}/${DATALAYER_PG_DATABASE}?sslmode=require"
+
+# Set PostgreSQL environment variables to avoid certificate file lookups
+export PGSSLMODE=require
+export PGSSLCERT=""
+export PGSSLKEY=""
+export PGSSLROOTCERT=""
 
 # Temporarily disable SSL certificate verification for Node.js
 export NODE_TLS_REJECT_UNAUTHORIZED=0
