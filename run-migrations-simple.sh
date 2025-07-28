@@ -1,11 +1,29 @@
 #!/bin/bash
 
-# Load environment variables safely
+# Load user's PATH and environment
+source ~/.bashrc 2>/dev/null || true
+source ~/.zshrc 2>/dev/null || true
+
+# Add common paths where pnpm might be installed
+export PATH="$HOME/.local/share/pnpm:$PATH"
+export PATH="/usr/local/bin:$PATH"
+export PATH="$HOME/.npm-global/bin:$PATH"
+
+# Load environment variables safely (skip problematic lines)
 if [ -f .env.production ]; then
     echo "Loading environment variables from .env.production..."
-    set -a  # automatically export all variables
-    source .env.production
-    set +a  # disable automatic export
+    # Filter out lines that might cause issues (JSON arrays, complex values)
+    while IFS= read -r line; do
+        # Skip comments and empty lines
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "$line" ]] && continue
+        # Skip lines with JSON arrays or complex structures
+        [[ "$line" =~ \[.*\] ]] && continue
+        # Export simple key=value pairs
+        if [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
+            export "$line"
+        fi
+    done < .env.production
 fi
 
 # Use SSL but don't verify certificates - works with DigitalOcean managed databases
@@ -29,10 +47,16 @@ if [[ "${DATALAYER_PG_HOST}" == "your-datalayer-db-host.db.ondigitalocean.com" ]
 fi
 
 # Check if pnpm is installed
+echo "Checking for pnpm..."
 if ! command -v pnpm &> /dev/null; then
-    echo "❌ Error: pnpm is not installed"
-    echo "Installing pnpm..."
-    npm install -g pnpm
+    echo "❌ Error: pnpm is not found in PATH"
+    echo "Current PATH: $PATH"
+    echo "Please install pnpm or ensure it's in your PATH"
+    echo "You can install it with: curl -fsSL https://get.pnpm.io/install.sh | sh -"
+    exit 1
+else
+    echo "✅ Found pnpm: $(which pnpm)"
+    echo "✅ pnpm version: $(pnpm --version)"
 fi
 
 echo "Running database migrations..."
