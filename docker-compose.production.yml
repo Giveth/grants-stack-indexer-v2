@@ -3,7 +3,7 @@ version: '3.8'
 services:
   # Reverse proxy with automatic HTTPS
   caddy:
-    name: caddy
+    container_name: caddy
     image: caddy:2.7-alpine
     restart: unless-stopped
     ports:
@@ -23,7 +23,7 @@ services:
 
   # Main application processing service
   processing:
-    name: processing
+    container_name: processing
     build:
       context: .
       dockerfile: Dockerfile
@@ -52,7 +52,7 @@ services:
 
   # Datalayer GraphQL API (Hasura)
   datalayer-graphql-api:
-    name: datalayer-graphql-api
+    container_name: datalayer-graphql-api
     image: hasura/graphql-engine:v2.43.0
     restart: unless-stopped
     environment:
@@ -80,7 +80,7 @@ services:
 
   # Indexer GraphQL API (Hasura)
   indexer-graphql-api:
-    name: indexer-graphql-api
+    container_name: indexer-graphql-api
     image: hasura/graphql-engine:v2.43.0
     restart: unless-stopped
     environment:
@@ -104,7 +104,7 @@ services:
 
   # Blockchain indexer service
   indexer:
-    name: indexer
+    container_name: indexer
     build:
       context: ./apps/indexer
       dockerfile: Dockerfile
