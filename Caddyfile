@@ -1,0 +1,151 @@
+# Main API endpoint - Datalayer GraphQL
+{$DOMAIN} {
+    # Enable automatic HTTPS
+    tls {$EMAIL}
+    
+    # Security headers
+    header {
+        # Enable HSTS
+        Strict-Transport-Security max-age=31536000;
+        # Prevent clickjacking
+        X-Frame-Options DENY
+        # Prevent content type sniffing
+        X-Content-Type-Options nosniff
+        # XSS protection
+        X-XSS-Protection "1; mode=block"
+        # Referrer policy
+        Referrer-Policy strict-origin-when-cross-origin
+        # Remove server info
+        -Server
+    }
+
+    # Rate limiting
+    rate_limit {
+        zone static_api {
+            key {remote_host}
+            events 100
+            window 1m
+        }
+    }
+
+    # Main GraphQL API
+    handle /v1/* {
+        reverse_proxy datalayer-graphql-api:8080 {
+            # Health check
+            health_uri /healthz
+            health_interval 30s
+            health_timeout 10s
+            
+            # Load balancing (for future scaling)
+            lb_policy round_robin
+            
+            # Headers
+            header_up Host {upstream_hostport}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Health check endpoint
+    handle /health {
+        respond "OK" 200
+    }
+
+    # Default response for root
+    handle {
+        respond "Grants Stack Indexer v2 API" 200
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 100mb
+            roll_keep 5
+            roll_keep_for 720h
+        }
+        format json
+        level INFO
+    }
+}
+
+# Indexer API subdomain
+indexer.{$DOMAIN} {
+    tls {$EMAIL}
+    
+    # Security headers (same as above)
+    header {
+        Strict-Transport-Security max-age=31536000;
+        X-Frame-Options DENY
+        X-Content-Type-Options nosniff
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy strict-origin-when-cross-origin
+        -Server
+    }
+
+    # Rate limiting for indexer API
+    rate_limit {
+        zone indexer_api {
+            key {remote_host}
+            events 200
+            window 1m
+        }
+    }
+
+    # Indexer GraphQL API
+    reverse_proxy indexer-graphql-api:8080 {
+        health_uri /healthz
+        health_interval 30s
+        health_timeout 10s
+        
+        header_up Host {upstream_hostport}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/indexer-access.log {
+            roll_size 100mb
+            roll_keep 5
+            roll_keep_for 720h
+        }
+        format json
+        level INFO
+    }
+}
+
+# Optional: Admin interface (only accessible from specific IPs)
+admin.{$DOMAIN} {
+    tls {$EMAIL}
+    
+    # Restrict access to admin interface
+    @allowed {
+        remote_ip {$ADMIN_IPS}
+    }
+    
+    handle @allowed {
+        # Hasura console for datalayer
+        handle /datalayer/* {
+            uri strip_prefix /datalayer
+            reverse_proxy datalayer-graphql-api:8080
+        }
+        
+        # Hasura console for indexer
+        handle /indexer/* {
+            uri strip_prefix /indexer
+            reverse_proxy indexer-graphql-api:8080
+        }
+        
+        # Default admin page
+        handle {
+            respond "Admin Interface - Use /datalayer or /indexer" 200
+        }
+    }
+    
+    # Deny all other IPs
+    handle {
+        respond "Access Denied" 403
+    }
+}
