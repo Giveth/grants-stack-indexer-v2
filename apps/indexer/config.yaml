@@ -329,7 +329,7 @@ networks:
           interval_ceiling: 2000 # Maximum blocks per request
           # backoff_millis: 1000 # Wait time before retrying in milliseconds
           # query_timeout_millis: 20000 # Timeout for RPC requests in milliseconds
-      start_block: 155250000
+      start_block: 155251500
       contracts:
           - name: Registry
             address:
