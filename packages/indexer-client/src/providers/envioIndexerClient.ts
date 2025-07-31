@@ -23,7 +23,7 @@ export class EnvioIndexerClient implements IIndexerClient {
     constructor(url: string, secret?: string) {
         this.client = new GraphQLClient(url);
         if (secret) {
-            this.client.setHeader("x-hasura-admin-secret", secret);
+            this.client.setHeader("X-Hasura-Admin-Secret", secret);
         }
     }
     /* @inheritdoc */
