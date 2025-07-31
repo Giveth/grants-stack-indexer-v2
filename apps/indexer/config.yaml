@@ -322,14 +322,14 @@ networks:
 
     - id: 1329 # sei-mainnet
       rpc_config:
-          url: ${ENVIO_SEI_RPC_URL:-https://evm-rpc.sei-apis.com}
+          url: ${ENVIO_SEI_RPC_URL:-https://sei.drpc.org}
           # initial_block_interval: 2000 # Number of blocks to request initially
           # backoff_multiplicative: 0 # Factor to reduce batch size on error
           # acceleration_additive: 0 # Increase batch size if no errors
           interval_ceiling: 2000 # Maximum blocks per request
           # backoff_millis: 1000 # Wait time before retrying in milliseconds
           # query_timeout_millis: 20000 # Timeout for RPC requests in milliseconds
-      start_block: 155251500
+      start_block: 155250000
       contracts:
           - name: Registry
             address:
