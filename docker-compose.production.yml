@@ -117,6 +117,7 @@ services:
             dockerfile: Dockerfile
         restart: unless-stopped
         environment:
+            - HYPERSYNC_BEARER_TOKEN=${HYPERSYNC_BEARER_TOKEN}
             - ENVIO_PG_HOST=${ENVIO_PG_HOST}
             - ENVIO_PG_PORT=${ENVIO_PG_PORT}
             - ENVIO_PG_USER=${ENVIO_PG_USER}
