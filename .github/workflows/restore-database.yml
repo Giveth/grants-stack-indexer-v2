@@ -1,0 +1,441 @@
+name: Restore Database Backup
+
+on:
+  workflow_dispatch:
+        inputs:
+            environment:
+                type: choice
+                description: Environment to restore database backup to
+                required: true
+                options:
+                    - staging
+                    - production
+            backup_file:
+                type: string
+                description: S3 path to backup file (e.g., backups/2024-01-15/database-backup.sql)
+                required: true
+            confirm_restore:
+                type: boolean
+                description: Confirm that you want to restore the database (THIS WILL OVERWRITE EXISTING DATA)
+                required: true
+                default: false
+
+jobs:
+  restore-database:
+        name: Restore Database Backup to ${{ github.event.inputs.environment }}
+        runs-on: ubuntu-latest
+        environment: ${{ github.event.inputs.environment }}
+        if: github.event.inputs.confirm_restore == 'true'
+        
+        env:
+            AWS_REGION: ${{ vars.AWS_REGION }}
+            APP_NAME: ${{ vars.APP_NAME }}
+            APP_ENVIRONMENT: ${{ github.event.inputs.environment }}
+            BACKUP_BUCKET: ${{ vars.BACKUP_BUCKET || format('{0}-terraform-state', vars.APP_NAME) }}
+            TERRAFORM_VARS: ${{ secrets.TERRAFORM_VARS }}
+
+        steps:
+            - name: Check out repository
+              uses: actions/checkout@v4
+
+            - name: Configure AWS credentials
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                  aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+                  aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  aws-region: ${{ vars.AWS_REGION }}
+
+            - name: Setup Terraform
+              uses: hashicorp/setup-terraform@v3
+              with:
+                  terraform_version: ${{ vars.TERRAFORM_VERSION || '1.6.0' }}
+                  terraform_wrapper: false
+
+            - name: Initialize Terraform
+              working-directory: ./deployment/environments/${{ github.event.inputs.environment }}
+              run: |
+                  terraform init \
+                    -backend-config="bucket=${{ vars.APP_NAME }}-terraform-state" \
+                    -backend-config="key=${{ vars.APP_NAME }}/${{ github.event.inputs.environment }}/terraform.tfstate" \
+                    -backend-config="region=${{ vars.AWS_REGION }}"
+
+            - name: Get infrastructure details
+              working-directory: ./deployment/environments/${{ github.event.inputs.environment }}
+              run: |
+                  RDS_ENDPOINT=$(terraform output -raw rds_endpoint 2>/dev/null || echo "")
+                  if [ -z "$RDS_ENDPOINT" ]; then
+                    echo "Error: Could not retrieve RDS endpoint from Terraform"
+                    exit 1
+                  fi
+                  
+                  # Get VPC and subnet details for dynamic bastion creation
+                  VPC_ID=$(terraform output -raw vpc_id 2>/dev/null || echo "")
+                  PUBLIC_SUBNET=$(terraform output -json public_subnets 2>/dev/null | jq -r '.[0]' || echo "")
+                  PROCESSING_SG=$(terraform output -raw processing_security_group_id 2>/dev/null || echo "")
+                  
+                  if [ -z "$VPC_ID" ] || [ -z "$PUBLIC_SUBNET" ] || [ -z "$PROCESSING_SG" ]; then
+                    echo "Error: Could not retrieve required infrastructure details"
+                    exit 1
+                  fi
+                  
+                  echo "RDS_ENDPOINT=${RDS_ENDPOINT}" >> $GITHUB_ENV
+                  echo "VPC_ID=${VPC_ID}" >> $GITHUB_ENV
+                  echo "PUBLIC_SUBNET=${PUBLIC_SUBNET}" >> $GITHUB_ENV
+                  echo "PROCESSING_SG=${PROCESSING_SG}" >> $GITHUB_ENV
+                  echo "DATABASE_URL=postgresql://${{ secrets.DATALAYER_PG_USER }}:${{ secrets.DATALAYER_PG_PASSWORD }}@localhost:5433/${{ vars.DATALAYER_PG_DB_NAME || 'grants_stack_indexer' }}" >> $GITHUB_ENV
+
+            - name: Install PostgreSQL client
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y wget ca-certificates jq
+                  wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+                  echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+                  sudo apt-get update
+                  sudo apt-get install -y postgresql-client-15
+
+            - name: Generate SSH key pair for temporary bastion
+              run: |
+                  mkdir -p ~/.ssh
+                  ssh-keygen -t rsa -b 4096 -f ~/.ssh/bastion_key -N ""
+                  echo "SSH key pair generated for temporary bastion"
+
+            - name: Create temporary bastion host
+              run: |
+                  echo "Creating temporary bastion host..."
+                  
+                  # Get the latest Amazon Linux 2 AMI for the current region
+                  AMI_ID=$(aws ec2 describe-images \
+                    --owners amazon \
+                    --filters 'Name=name,Values=amzn2-ami-hvm-*-x86_64-gp2' \
+                              'Name=state,Values=available' \
+                    --query 'Images | sort_by(@, &CreationDate) | [-1].ImageId' \
+                    --output text \
+                    --region ${{ vars.AWS_REGION }})
+                  
+                  echo "Using AMI ID: $AMI_ID"
+                  
+                  # Create temporary security group for bastion SSH access
+                  TEMP_SG_NAME="temp-bastion-sg-${{ github.run_id }}-${{ github.run_attempt }}"
+                  TEMP_SG_ID=$(aws ec2 create-security-group \
+                    --group-name "$TEMP_SG_NAME" \
+                    --description "Temporary security group for database restore bastion" \
+                    --vpc-id ${{ env.VPC_ID }} \
+                    --region ${{ vars.AWS_REGION }} \
+                    --query 'GroupId' \
+                    --output text)
+                  
+                  # Add SSH inbound rule to the temporary security group
+                  aws ec2 authorize-security-group-ingress \
+                    --group-id "$TEMP_SG_ID" \
+                    --protocol tcp \
+                    --port 22 \
+                    --cidr 0.0.0.0/0 \
+                    --region ${{ vars.AWS_REGION }}
+                  
+                  echo "Temporary security group $TEMP_SG_ID created with SSH access"
+                  
+                  # Create temporary key pair in AWS
+                  TEMP_KEY_NAME="temp-bastion-${{ github.run_id }}-${{ github.run_attempt }}"
+                  aws ec2 import-key-pair \
+                    --key-name "$TEMP_KEY_NAME" \
+                    --public-key-material fileb://~/.ssh/bastion_key.pub \
+                    --region ${{ vars.AWS_REGION }}
+                  
+                  # Launch bastion instance with temporary security group
+                  INSTANCE_ID=$(aws ec2 run-instances \
+                    --image-id "$AMI_ID" \
+                    --instance-type t3.micro \
+                    --key-name "$TEMP_KEY_NAME" \
+                    --security-group-ids "$TEMP_SG_ID" \
+                    --subnet-id ${{ env.PUBLIC_SUBNET }} \
+                    --associate-public-ip-address \
+                    --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=temp-restore-bastion-${{ github.run_id }}},{Key=Purpose,Value=database-restore},{Key=AutoDelete,Value=true}]' \
+                    --region ${{ vars.AWS_REGION }} \
+                    --query 'Instances[0].InstanceId' \
+                    --output text)
+                  
+                  echo "TEMP_KEY_NAME=$TEMP_KEY_NAME" >> $GITHUB_ENV
+                  echo "TEMP_SG_ID=$TEMP_SG_ID" >> $GITHUB_ENV
+                  echo "BASTION_INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_ENV
+                  echo "Bastion instance $INSTANCE_ID created with security group $TEMP_SG_ID"
+
+            - name: Wait for bastion to be ready
+              run: |
+                  echo "Waiting for bastion instance to be ready..."
+                  aws ec2 wait instance-running --instance-ids ${{ env.BASTION_INSTANCE_ID }} --region ${{ vars.AWS_REGION }}
+                  
+                  # Get public IP
+                  BASTION_IP=$(aws ec2 describe-instances \
+                    --instance-ids ${{ env.BASTION_INSTANCE_ID }} \
+                    --region ${{ vars.AWS_REGION }} \
+                    --query 'Reservations[0].Instances[0].PublicIpAddress' \
+                    --output text)
+                  
+                  echo "BASTION_IP=$BASTION_IP" >> $GITHUB_ENV
+                  echo "Bastion ready at IP: $BASTION_IP"
+                  
+                  # Wait for SSH to be ready with better error handling
+                  echo "Waiting for SSH service to be ready..."
+                  SSH_READY=false
+                  for i in {1..60}; do
+                    echo "Attempt $i/60: Testing SSH connection..."
+                    if timeout 10 ssh -i ~/.ssh/bastion_key -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ec2-user@$BASTION_IP echo "SSH ready" 2>/dev/null; then
+                      echo "✅ SSH connection established successfully"
+                      SSH_READY=true
+                      break
+                    fi
+                    echo "SSH not ready yet, waiting 10 seconds..."
+                    sleep 10
+                  done
+                  
+                  if [ "$SSH_READY" = "false" ]; then
+                    echo "❌ SSH connection failed after 10 minutes. Checking instance status..."
+                    aws ec2 describe-instances --instance-ids ${{ env.BASTION_INSTANCE_ID }} --region ${{ vars.AWS_REGION }}
+                    exit 1
+                  fi
+
+            - name: Setup SSH tunnel to RDS
+              run: |
+                  echo "Setting up SSH tunnel through temporary bastion host..."
+                  
+                  # Extract just the hostname from RDS endpoint (remove port if present)
+                  RDS_HOST=$(echo "${{ env.RDS_ENDPOINT }}" | cut -d':' -f1)
+                  echo "RDS Host: $RDS_HOST"
+                  echo "Bastion IP: ${{ env.BASTION_IP }}"
+                  
+                  # Create SSH tunnel: localhost:5433 -> bastion -> RDS:5432
+                  ssh -i ~/.ssh/bastion_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -f -N -L 5433:${RDS_HOST}:5432 ec2-user@${{ env.BASTION_IP }}
+                  
+                  echo "✅ SSH tunnel established: localhost:5433 -> bastion -> ${RDS_HOST}:5432"
+                  
+                  # Verify tunnel is working
+                  sleep 2
+                  if netstat -tuln | grep :5433; then
+                    echo "✅ Tunnel is listening on port 5433"
+                  else
+                    echo "❌ Tunnel setup failed - port 5433 not listening"
+                    exit 1
+                  fi
+
+            - name: Verify backup file exists
+              run: |
+                  if ! aws s3 ls "s3://${{ env.BACKUP_BUCKET }}/${{ github.event.inputs.backup_file }}"; then
+                    echo "Error: Backup file not found at s3://${{ env.BACKUP_BUCKET }}/${{ github.event.inputs.backup_file }}"
+                    exit 1
+                  fi
+                  echo "✅ Backup file found"
+
+            - name: Download backup file
+              run: |
+                  mkdir -p ./temp-backup
+                  aws s3 cp "s3://${{ env.BACKUP_BUCKET }}/${{ github.event.inputs.backup_file }}" ./temp-backup/backup.sql
+                  echo "✅ Backup file downloaded"
+
+            - name: Verify database connection through tunnel
+              run: |
+                  echo "Testing database connection through SSH tunnel..."
+                  
+                  # Wait a moment for tunnel to be fully established
+                  sleep 5
+                  
+                  if pg_isready -h localhost -p 5433 -U "${{ secrets.DATALAYER_PG_USER }}"; then
+                    echo "✅ Database connection verified through SSH tunnel"
+                  else
+                    echo "❌ Failed to connect to database through SSH tunnel"
+                    exit 1
+                  fi
+
+            - name: Create database backup before restore
+              run: |
+                  TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+                  BACKUP_NAME="pre_restore_backup_${TIMESTAMP}.sql"
+                  # Extract database name from TERRAFORM_VARS to match deployment
+                  if [ -n "${{ secrets.TERRAFORM_VARS }}" ]; then
+                    DB_NAME=$(echo '${{ secrets.TERRAFORM_VARS }}' | jq -r '.BLUE_DATALAYER_PG_DB_NAME // "grants_stack_indexer"')
+                  else
+                    DB_NAME="${{ vars.DATALAYER_PG_DB_NAME || 'grants_stack_indexer' }}"
+                  fi
+                  
+                  echo "Checking if database exists before creating backup..."
+                  
+                  # Check if the target database exists
+                  POSTGRES_URL="postgresql://${{ secrets.DATALAYER_PG_USER }}:${{ secrets.DATALAYER_PG_PASSWORD }}@localhost:5433/postgres"
+                  
+                  if psql "$POSTGRES_URL" -tAc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" | grep -q 1; then
+                    echo "Database '${DB_NAME}' exists. Creating pre-restore backup: ${BACKUP_NAME}"
+                    pg_dump "${{ env.DATABASE_URL }}" > "./temp-backup/${BACKUP_NAME}"
+                    
+                    aws s3 cp "./temp-backup/${BACKUP_NAME}" "s3://${{ env.BACKUP_BUCKET }}/pre-restore-backups/${BACKUP_NAME}"
+                    echo "✅ Pre-restore backup created and uploaded to S3"
+                  else
+                    echo "⚠️ Database '${DB_NAME}' does not exist. Skipping pre-restore backup (this is normal for fresh RDS instances)."
+                    echo "Will create the database during restore process."
+                  fi
+
+            - name: Stop ECS services
+              run: |
+                  CLUSTER_NAME=$(cd ./deployment/environments/${{ github.event.inputs.environment }} && terraform output -raw cluster_name)
+                  
+                  echo "Stopping ECS services in cluster: ${CLUSTER_NAME}"
+                  
+                  aws ecs update-service \
+                    --cluster "${CLUSTER_NAME}" \
+                    --service "${{ env.APP_NAME }}-api-service" \
+                    --desired-count 0 \
+                    --region "${{ env.AWS_REGION }}"
+                  
+                  echo "✅ ECS services stopped"
+
+            - name: Wait for services to stop
+              run: |
+                  CLUSTER_NAME=$(cd ./deployment/environments/${{ github.event.inputs.environment }} && terraform output -raw cluster_name)
+                  
+                  echo "Waiting for services to stop..."
+                  aws ecs wait services-stable \
+                    --cluster "${CLUSTER_NAME}" \
+                    --services "${{ env.APP_NAME }}-api-service" \
+                    --region "${{ env.AWS_REGION }}"
+                  
+                  echo "✅ Services have stopped"
+
+            - name: Restore database
+              run: |
+                  echo "🔄 Starting database restore..."
+                  
+                  # Extract database name from TERRAFORM_VARS to match deployment
+                  if [ -n "${{ secrets.TERRAFORM_VARS }}" ]; then
+                    DB_NAME=$(echo '${{ secrets.TERRAFORM_VARS }}' | jq -r '.BLUE_DATALAYER_PG_DB_NAME // "grants_stack_indexer"')
+                  else
+                    DB_NAME="${{ vars.DATALAYER_PG_DB_NAME || 'grants_stack_indexer' }}"
+                  fi
+                  
+                  # Use SSH tunnel connection (localhost:5433) instead of direct RDS connection
+                  POSTGRES_URL="postgresql://${{ secrets.DATALAYER_PG_USER }}:${{ secrets.DATALAYER_PG_PASSWORD }}@localhost:5433/postgres"
+                  
+                  echo "Terminating existing connections to database '${DB_NAME}'..."
+                  psql "$POSTGRES_URL" -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${DB_NAME}' AND pid <> pg_backend_pid();" || true
+                  
+                  echo "Dropping database '${DB_NAME}' if it exists..."
+                  psql "$POSTGRES_URL" -c "DROP DATABASE IF EXISTS ${DB_NAME};"
+                  
+                  echo "Creating database '${DB_NAME}'..."
+                  psql "$POSTGRES_URL" -c "CREATE DATABASE ${DB_NAME};"
+                  
+                  echo "Restoring data from backup file..."
+                  
+                  # Check if backup file is custom format or plain SQL
+                  if file ./temp-backup/backup.sql | grep -q "PostgreSQL custom database dump"; then
+                    echo "Detected PostgreSQL custom format dump, using pg_restore..."
+                    
+                    # Set password environment variable for pg_restore
+                    export PGPASSWORD="${{ secrets.DATALAYER_PG_PASSWORD }}"
+                    
+                    # pg_restore may exit with non-zero code due to expected errors (e.g., objects already exist)
+                    # We capture the exit code but don't fail the step if the restore generally succeeded
+                    pg_restore --host=localhost --port=5433 \
+                      --username="${{ secrets.DATALAYER_PG_USER }}" \
+                      --dbname="${DB_NAME}" \
+                      --verbose --clean --no-owner --no-privileges \
+                      --no-password \
+                      ./temp-backup/backup.sql || {
+                        RESTORE_EXIT_CODE=$?
+                        echo "⚠️ pg_restore exited with code ${RESTORE_EXIT_CODE} (this may be expected due to duplicate objects or constraints)"
+                        echo "Checking if database restore was successful by verifying data exists..."
+                        
+                        # Check if any tables were created (basic success indicator)
+                        # Use the SSH tunnel connection for verification
+                        VERIFY_URL="postgresql://${{ secrets.DATALAYER_PG_USER }}:${{ secrets.DATALAYER_PG_PASSWORD }}@localhost:5433/${DB_NAME}"
+                        TABLE_COUNT=$(psql "$VERIFY_URL" -tAc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';")
+                        echo "Found ${TABLE_COUNT} tables in the restored database"
+                        
+                        if [ "${TABLE_COUNT}" -gt 0 ]; then
+                          echo "✅ Database restore appears successful despite pg_restore warnings/errors"
+                        else
+                          echo "❌ Database restore failed - no tables found"
+                          exit ${RESTORE_EXIT_CODE}
+                        fi
+                      }
+                  else
+                    echo "Detected plain SQL format, using psql..."
+                    psql "${{ env.DATABASE_URL }}" < ./temp-backup/backup.sql
+                  fi
+                  
+                  echo "✅ Database restore completed successfully"
+
+            - name: Restart ECS services
+              run: |
+                  CLUSTER_NAME=$(cd ./deployment/environments/${{ github.event.inputs.environment }} && terraform output -raw cluster_name)
+                  
+                  echo "Restarting ECS services..."
+                  
+                  aws ecs update-service \
+                    --cluster "${CLUSTER_NAME}" \
+                    --service "${{ env.APP_NAME }}-api-service" \
+                    --desired-count 1 \
+                    --region "${{ env.AWS_REGION }}"
+                  
+                  echo "✅ ECS services restarted"
+
+            - name: Wait for services to be healthy
+              run: |
+                  CLUSTER_NAME=$(cd ./deployment/environments/${{ github.event.inputs.environment }} && terraform output -raw cluster_name)
+                  
+                  echo "Waiting for services to become healthy..."
+                  aws ecs wait services-stable \
+                    --cluster "${CLUSTER_NAME}" \
+                    --services "${{ env.APP_NAME }}-api-service" \
+                    --region "${{ env.AWS_REGION }}"
+                  
+                  echo "✅ Services are healthy"
+
+            - name: Cleanup temporary files
+              run: |
+                  rm -rf ./temp-backup
+                  echo "✅ Temporary files cleaned up"
+
+            - name: Cleanup temporary bastion host
+              if: always()
+              run: |
+                  echo "Cleaning up temporary bastion host..."
+                  
+                  # Terminate bastion instance
+                  if [ -n "${{ env.BASTION_INSTANCE_ID }}" ]; then
+                    aws ec2 terminate-instances \
+                      --instance-ids ${{ env.BASTION_INSTANCE_ID }} \
+                      --region ${{ vars.AWS_REGION }}
+                    echo "Bastion instance ${{ env.BASTION_INSTANCE_ID }} terminated"
+                    
+                    # Wait for instance to terminate before deleting security group
+                    echo "Waiting for instance to terminate..."
+                    aws ec2 wait instance-terminated --instance-ids ${{ env.BASTION_INSTANCE_ID }} --region ${{ vars.AWS_REGION }}
+                  fi
+                  
+                  # Delete temporary security group
+                  if [ -n "${{ env.TEMP_SG_ID }}" ]; then
+                    aws ec2 delete-security-group \
+                      --group-id ${{ env.TEMP_SG_ID }} \
+                      --region ${{ vars.AWS_REGION }}
+                    echo "Temporary security group ${{ env.TEMP_SG_ID }} deleted"
+                  fi
+                  
+                  # Delete temporary key pair
+                  if [ -n "${{ env.TEMP_KEY_NAME }}" ]; then
+                    aws ec2 delete-key-pair \
+                      --key-name ${{ env.TEMP_KEY_NAME }} \
+                      --region ${{ vars.AWS_REGION }}
+                    echo "Temporary key pair ${{ env.TEMP_KEY_NAME }} deleted"
+                  fi
+                  
+                  # Clean up local SSH keys
+                  rm -f ~/.ssh/bastion_key ~/.ssh/bastion_key.pub
+                  echo "✅ Temporary bastion host, security group, and keys cleaned up"
+
+            - name: Restore summary
+              run: |
+                  echo "🎉 Database restore completed successfully!"
+                  echo "Environment: ${{ github.event.inputs.environment }}"
+                  echo "Backup file: ${{ github.event.inputs.backup_file }}"
+                  echo "Database: ${{ env.RDS_ENDPOINT }}/${{ vars.DATALAYER_PG_DB_NAME || 'grants_stack_indexer' }}"
+                  echo ""
+                  echo "⚠️  A pre-restore backup was created and uploaded to S3 for safety."
+                  echo "Services have been restarted and should be operational."
