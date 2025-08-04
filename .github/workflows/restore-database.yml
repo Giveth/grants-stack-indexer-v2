@@ -62,8 +62,20 @@ jobs:
             - name: Refresh Terraform state
               working-directory: ./deployment/environments/${{ github.event.inputs.environment }}
               run: |
-                  # Set Terraform variables from secrets
-                  echo "${{ secrets.TERRAFORM_VARS }}" > terraform.tfvars
+                  # Convert JSON TERRAFORM_VARS to .tfvars format
+                  if [ -n "${{ secrets.TERRAFORM_VARS }}" ]; then
+                    echo '${{ secrets.TERRAFORM_VARS }}' | jq -r 'to_entries[] | "\(.key) = \"\(.value)\""' > terraform.tfvars
+                  else
+                    echo "Warning: TERRAFORM_VARS secret is empty"
+                    touch terraform.tfvars
+                  fi
+                  
+                  # Add environment variables that are available as GitHub vars/secrets
+                  echo "AWS_REGION = \"${{ vars.AWS_REGION }}\"" >> terraform.tfvars
+                  echo "APP_NAME = \"${{ vars.APP_NAME }}\"" >> terraform.tfvars
+                  echo "APP_ENVIRONMENT = \"${{ github.event.inputs.environment }}\"" >> terraform.tfvars
+                  echo "DATALAYER_PG_USER = \"${{ secrets.DATALAYER_PG_USER }}\"" >> terraform.tfvars
+                  echo "DATALAYER_PG_PASSWORD = \"${{ secrets.DATALAYER_PG_PASSWORD }}\"" >> terraform.tfvars
                   
                   # Refresh the state to ensure outputs are up to date
                   terraform refresh -var-file=terraform.tfvars
