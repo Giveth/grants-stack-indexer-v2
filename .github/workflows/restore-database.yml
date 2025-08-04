@@ -59,6 +59,15 @@ jobs:
                     -backend-config="key=${{ vars.APP_NAME }}/${{ github.event.inputs.environment }}/terraform.tfstate" \
                     -backend-config="region=${{ vars.AWS_REGION }}"
 
+            - name: Refresh Terraform state
+              working-directory: ./deployment/environments/${{ github.event.inputs.environment }}
+              run: |
+                  # Set Terraform variables from secrets
+                  echo "${{ secrets.TERRAFORM_VARS }}" > terraform.tfvars
+                  
+                  # Refresh the state to ensure outputs are up to date
+                  terraform refresh -var-file=terraform.tfvars
+
             - name: Get infrastructure details
               working-directory: ./deployment/environments/${{ github.event.inputs.environment }}
               run: |
