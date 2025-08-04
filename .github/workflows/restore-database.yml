@@ -63,10 +63,13 @@ jobs:
               working-directory: ./deployment/environments/${{ github.event.inputs.environment }}
               run: |
                   # Convert JSON TERRAFORM_VARS to .tfvars format
-                  if [ -n "${{ secrets.TERRAFORM_VARS }}" ]; then
-                    echo '${{ secrets.TERRAFORM_VARS }}' | jq -r 'to_entries[] | "\(.key) = \"\(.value)\""' > terraform.tfvars
+                  if [ -n "$TERRAFORM_VARS" ]; then
+                    echo "$TERRAFORM_VARS" | jq -r 'to_entries[] | "\(.key) = \"\(.value)\""' > terraform.tfvars
+                    echo "Successfully converted TERRAFORM_VARS to terraform.tfvars"
                   else
-                    echo "Warning: TERRAFORM_VARS secret is empty"
+                    echo "Warning: TERRAFORM_VARS environment variable is empty"
+                    echo "Available environment variables:"
+                    env | grep -E '^(AWS_|APP_|TERRAFORM_|DATALAYER_)' || echo "No matching environment variables found"
                     touch terraform.tfvars
                   fi
                   
