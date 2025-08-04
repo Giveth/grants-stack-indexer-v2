@@ -56,8 +56,9 @@ jobs:
               run: |
                   terraform init \
                     -backend-config="bucket=${{ vars.APP_NAME }}-terraform-state" \
-                    -backend-config="key=${{ vars.APP_NAME }}/${{ github.event.inputs.environment }}/terraform.tfstate" \
-                    -backend-config="region=${{ vars.AWS_REGION }}"
+                    -backend-config="key=${{ vars.APP_NAME }}-${{ github.event.inputs.environment }}-state" \
+                    -backend-config="region=${{ vars.AWS_REGION }}" \
+                    -backend-config="encrypt=true"
 
             - name: Get infrastructure details
               working-directory: ./deployment/environments/${{ github.event.inputs.environment }}
