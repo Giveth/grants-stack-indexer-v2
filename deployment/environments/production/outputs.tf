@@ -43,3 +43,8 @@ output "api_security_group_id" {
 output "load_balancer_security_group_id" {
   value = module.networking.load_balancer_security_group_id
 }
+
+# Cluster name for the active deployment
+output "cluster_name" {
+  value = var.ACTIVE_DEPLOYMENT == "blue" ? module.blue_compute.ecs_cluster_name : module.green_compute.ecs_cluster_name
+}
