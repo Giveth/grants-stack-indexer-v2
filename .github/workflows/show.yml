@@ -1,0 +1,26 @@
+name: Show Staging Secrets
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        description: Environment to check
+        required: true
+        default: staging
+        options:
+          - staging
+          - production
+
+jobs:
+  show-secrets:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    steps:
+      - name: Show database credentials
+        run: |
+          echo "Environment: ${{ github.event.inputs.environment }}"
+          echo "DATALAYER_PG_USER: ${{ secrets.DATALAYER_PG_USER }}"
+          echo "DATALAYER_PG_PASSWORD: [REDACTED - Length: ${#DATALAYER_PG_PASSWORD}]"
+        env:
+          DATALAYER_PG_PASSWORD: ${{ secrets.DATALAYER_PG_PASSWORD }}
