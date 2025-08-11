@@ -117,7 +117,7 @@ http://localhost:8082/
 
 Use the default password: `my-admin-secret`.
 
-## To add a new chain
+## To add a new Chain
 
 1. On `indexer` package add the chain to `config.yaml` (refer to : [[How to add a new chain](apps/indexer/README.md)] )
 2. On `shared` package modify `tokens.ts` and add the tokens you will search price for (Refer to : [[How to add a new token](apps/shared/README.md)] )
