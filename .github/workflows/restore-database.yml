@@ -83,7 +83,7 @@ jobs:
                   echo "VPC_ID=${VPC_ID}" >> $GITHUB_ENV
                   echo "PUBLIC_SUBNET=${PUBLIC_SUBNET}" >> $GITHUB_ENV
                   echo "PROCESSING_SG=${PROCESSING_SG}" >> $GITHUB_ENV
-                  echo "DATABASE_URL=postgresql://${{ secrets.DATALAYER_PG_USER }}:${{ secrets.DATALAYER_PG_PASSWORD }}@localhost:5433/${{ vars.DATALAYER_PG_DB_NAME || 'grants_stack_indexer' }}" >> $GITHUB_ENV
+                  echo "DATABASE_URL=postgresql://${{ secrets.DATALAYER_PG_USER }}:${{ secrets.DATALAYER_PG_PASSWORD }}@localhost:5433/${{ vars.DATALAYER_PG_DB_NAME || 'GitcoinDataLayerGreen' }}" >> $GITHUB_ENV
 
             - name: Install PostgreSQL client
               run: |
@@ -252,9 +252,9 @@ jobs:
                   BACKUP_NAME="pre_restore_backup_${TIMESTAMP}.sql"
                   # Extract database name from TERRAFORM_VARS to match deployment
                   if [ -n "${{ secrets.TERRAFORM_VARS }}" ]; then
-                    DB_NAME=$(echo '${{ secrets.TERRAFORM_VARS }}' | jq -r '.BLUE_DATALAYER_PG_DB_NAME // "grants_stack_indexer"')
+                    DB_NAME=$(echo '${{ secrets.TERRAFORM_VARS }}' | jq -r '.DATALAYER_PG_DB_NAME // "GitcoinDataLayerGreen"')
                   else
-                    DB_NAME="${{ vars.DATALAYER_PG_DB_NAME || 'grants_stack_indexer' }}"
+                    DB_NAME="${{ vars.DATALAYER_PG_DB_NAME || 'GitcoinDataLayerGreen' }}"
                   fi
                   
                   echo "Checking if database exists before creating backup..."
@@ -305,9 +305,9 @@ jobs:
                   
                   # Extract database name from TERRAFORM_VARS to match deployment
                   if [ -n "${{ secrets.TERRAFORM_VARS }}" ]; then
-                    DB_NAME=$(echo '${{ secrets.TERRAFORM_VARS }}' | jq -r '.BLUE_DATALAYER_PG_DB_NAME // "grants_stack_indexer"')
+                    DB_NAME=$(echo '${{ secrets.TERRAFORM_VARS }}' | jq -r '.DATALAYER_PG_DB_NAME // "GitcoinDataLayerGreen"')
                   else
-                    DB_NAME="${{ vars.DATALAYER_PG_DB_NAME || 'grants_stack_indexer' }}"
+                    DB_NAME="${{ vars.DATALAYER_PG_DB_NAME || 'GitcoinDataLayerGreen' }}"
                   fi
                   
                   # Use SSH tunnel connection (localhost:5433) instead of direct RDS connection
